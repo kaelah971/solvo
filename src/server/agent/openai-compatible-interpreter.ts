@@ -445,6 +445,14 @@ export class OpenAICompatibleIntentInterpreter implements IntentInterpreter {
         "The model response contained no interpretation text.",
       );
     }
+    // Secret-shaped content (keys, tokens, DB URLs) must never leave the
+    // provider boundary in any field — reject the whole output, fail closed.
+    if (redactAgentRawText(outputText) !== outputText) {
+      throw new AgentProviderError(
+        "invalid_output",
+        "The model output contains secret-shaped content.",
+      );
+    }
 
     let modelOutput: unknown;
     try {
