@@ -1,5 +1,5 @@
 import type { SolvoRepository } from "../db/repository.ts";
-import type { WorkspaceMemberRow, WorkspaceRow } from "../db/types.ts";
+import type { AgentRunRow, WorkspaceMemberRow, WorkspaceRow } from "../db/types.ts";
 import type { AgentConfig } from "./config.ts";
 import { extractCandidates, type ExtractionResult } from "./extraction.ts";
 import type { IntentInterpreter } from "./interpreter.ts";
@@ -92,34 +92,33 @@ export async function runAgentOrchestration(input: AgentServiceInput, deps: Agen
   const hourlyCount = await deps.repo.countAgentRunsSince({ telegramUserId: agentInput.userId, sinceIso: hourlySince });
   const dailyCount = await deps.repo.countAgentRunsSince({ telegramUserId: agentInput.userId, sinceIso: dailySince });
   if (hourlyCount >= deps.config.maxHourlyRunsPerUser || dailyCount >= deps.config.maxDailyRunsPerUser) {
-    await createRateLimitedRun(deps, agentInput, idempotencyKey, workspace);
+    const limited = await createOrReuseRun(
+      deps,
+      agentInput,
+      idempotencyKey,
+      workspace,
+      "blocked",
+      "rate_limited",
+      "Agent-run limit reached for this hour or day.",
+    );
+    if (limited.existing) {
+      return { outcome: "duplicate", payoutId: limited.run.payout_id, claimId: limited.run.claim_id };
+    }
     return {
       outcome: "rate_limited",
       reason: "Agent-run limit reached for this hour or day. Try again later.",
     };
   }
 
-  // 4. Idempotency: a previously recorded run for this message wins; the
+  // 4+5. Serialized run creation: the advisory lock makes concurrent
+  // duplicate deliveries resolve to ONE run (and therefore one payout/claim
+  // downstream). A previously recorded run for this message wins and the
   // bridges are never re-run.
-  const existing = await deps.repo.getAgentRunByIdempotencyKey(idempotencyKey);
-  if (existing) {
-    return { outcome: "duplicate", payoutId: existing.payout_id, claimId: existing.claim_id };
+  const created = await createOrReuseRun(deps, agentInput, idempotencyKey, workspace, "received");
+  if (created.existing) {
+    return { outcome: "duplicate", payoutId: created.run.payout_id, claimId: created.run.claim_id };
   }
-
-  // 5. Create the run.
-  const run = await deps.repo.createAgentRun({
-    workspaceId: workspace?.id ?? null,
-    surface: agentInput.surface,
-    telegramChatId: agentInput.chatId,
-    telegramUserId: agentInput.userId,
-    telegramMessageId: agentInput.messageId !== null ? String(agentInput.messageId) : null,
-    idempotencyKey,
-    provider: deps.config.provider,
-    status: "received",
-    inputHash: hashAgentInput(agentInput.rawText),
-    rawTextRedacted: redactAgentRawText(agentInput.rawText),
-    candidatesJson: {},
-  });
+  const run = created.run;
   await appendAudit(deps, workspace, "agent_run_started", { agentRunId: run.id, provider: run.provider });
 
   try {
@@ -242,29 +241,43 @@ export async function runAgentOrchestration(input: AgentServiceInput, deps: Agen
 
 // ── Run helpers ────────────────────────────────────────────────────────────
 
-async function createRateLimitedRun(
+/**
+ * Serialized run creation: takes the advisory idempotency lock and re-checks
+ * inside the transaction, so concurrent duplicate deliveries (or a delivery
+ * racing a rate-limited attempt) resolve to ONE run row — mirroring the
+ * community-pay-flow / claim-flow patterns.
+ */
+async function createOrReuseRun(
   deps: AgentServiceDeps,
   agentInput: AgentInput,
   idempotencyKey: string,
   workspace: WorkspaceRow | null,
-): Promise<void> {
-  const existing = await deps.repo.getAgentRunByIdempotencyKey(idempotencyKey);
-  if (existing) return;
-  await deps.repo.createAgentRun({
-    workspaceId: workspace?.id ?? null,
-    surface: agentInput.surface,
-    telegramChatId: agentInput.chatId,
-    telegramUserId: agentInput.userId,
-    telegramMessageId: agentInput.messageId !== null ? String(agentInput.messageId) : null,
-    idempotencyKey,
-    provider: deps.config.provider,
-    status: "blocked",
-    inputHash: hashAgentInput(agentInput.rawText),
-    rawTextRedacted: redactAgentRawText(agentInput.rawText),
-    candidatesJson: {},
-    errorCode: "rate_limited",
-    errorMessageRedacted: "Agent-run limit reached for this hour or day.",
+  status: "received" | "blocked",
+  errorCode?: string,
+  errorMessageRedacted?: string,
+): Promise<{ existing: boolean; run: AgentRunRow }> {
+  const persisted = await deps.repo.transaction(async (tx) => {
+    await tx.lockIdempotencyKey(idempotencyKey);
+    const raced = await tx.getAgentRunByIdempotencyKey(idempotencyKey);
+    if (raced) return { existing: true, run: raced };
+    const run = await tx.createAgentRun({
+      workspaceId: workspace?.id ?? null,
+      surface: agentInput.surface,
+      telegramChatId: agentInput.chatId,
+      telegramUserId: agentInput.userId,
+      telegramMessageId: agentInput.messageId !== null ? String(agentInput.messageId) : null,
+      idempotencyKey,
+      provider: deps.config.provider,
+      status,
+      inputHash: hashAgentInput(agentInput.rawText),
+      rawTextRedacted: redactAgentRawText(agentInput.rawText),
+      candidatesJson: {},
+      errorCode,
+      errorMessageRedacted,
+    });
+    return { existing: false, run };
   });
+  return persisted;
 }
 
 async function terminalRun(
