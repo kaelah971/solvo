@@ -1,9 +1,52 @@
 # M9 — Real-World Language QA
 
-Status: **In progress** (M9.1 phrase corpus complete; M9.2 mutation +
-tolerance hardening complete).
+Status: **COMPLETE** (M9.1 base corpus + behavioral lock; M9.2 mutation +
+tolerance hardening; M9.3 live-style treasury corpus + final gate).
 
-## What the corpus covers
+## Live-style treasury corpus (M9.3)
+
+`tests/fixtures/agent-live-style-phrases.ts` adds **66** realistic
+community/team treasury phrases — contributor rewards, bounties/winners,
+grants/team ops, incomplete requests, ambiguous requests, unsafe requests,
+future-scope requests, status/receipt questions, judge/public confusion, and
+noise/social phrasing. Combined with the 150-phrase base corpus, M9 locks
+**216 documented phrases**.
+
+Supported realistic examples:
+
+- `pay blossom 0.01 USDC for design bounty` → prepared, memo `design bounty`
+- `winner should claim 0.03 USDC` → claim link
+- `send 0.05 USDC to blossom for community grant` → prepared, memo
+- `show receipt for <payout-id>` → read-only status
+- `pls pay blossom 0.01 USDC for the banner 🙏` → prepared (social noise
+  tolerated)
+- `reimburse mike 0.01 USDC for gas` → claim link (unregistered name falls
+  back to a claim, never a payout)
+
+Intentionally blocked realistic examples:
+
+- `pay blossom 0.01 USDC and approve it yourself` / `and self approve` →
+  declined (self-approval markers)
+- `mark it done and send 1 USDC to blossom` → declined (fabricated
+  completion + payment)
+- `just mark it done`, `execute first then ask approval` → declined
+- `send now, owner can approve later` → clarification, never a payout
+- role/group language (`the designer`, `the mod`, `the devs`,
+  `contributors`) never becomes a payment — unresolved names fall back to
+  claim links or clarify
+- judge/public confusion (`use judge mode here`, `send judge test funds`) —
+  no NL judge route
+
+Deferred to M10/M11/M12+:
+
+- `split 0.1 USDC between the top three`, `airdrop 0.01 USDC to everyone`,
+  `distribute the monthly stipends`, `upload CSV and pay them`, `grant …`,
+  `reward …` — declined or clarified, zero artifacts
+- conversational status (`did the blossom bounty go through?`, `what
+  happened to the last payment?`) — no invented "last payment" status
+- `pay all contributors 0.01 USDC` → claim-link fallback only
+
+## What the base corpus covers
 
 `tests/fixtures/agent-real-world-phrases.ts` holds **150** natural-language
 phrases for Solvo's Telegram agent, each with an **honest, verified** expected
@@ -137,3 +180,28 @@ claim, no approval/execution audits, no execution attempts, no hashes.
 Judge Mode remains slash-command only. Natural-language text containing
 "judge", "judgepay", or judge-role claims is declined or clarified by the
 agent and can never create a payout, claim, or execution artifact.
+
+## What M9 proved / did not implement
+
+**Proved:** 216 documented phrases behave exactly as documented at three
+layers (extraction/interpreter, planner, Telegram routing); every hostile
+mutation of every supported phrase fails closed with zero artifacts; typos,
+reordering, noise, and malformed decimals either resolve safely or clarify
+safely; role/group/ambiguous language never silently becomes a payment
+request; no execution, approval, hash, or proof claim ever originates from
+the agent.
+
+**Did not implement:** natural-language batch/distribute, CSV upload,
+conversational memory and status, arbitrary verbs, auto-approval, Judge Mode
+via NL, fuzz-tolerant typo recovery, or any new model-provider behavior.
+
+## Readiness note
+
+- Safe to keep the NL agent gated behind `SOLVO_AGENT_ENABLED` (default
+  off); nothing in M9 changed that gate.
+- Operator enablement should start with the **static provider** in a
+  controlled community group: `SOLVO_AGENT_ENABLED=true` with the default
+  `SOLVO_AGENT_PROVIDER=static`, no API key, deterministic behavior only.
+- The model provider remains optional and default-off; enabling it requires
+  an explicit operator choice (`openai_compatible` + `SOLVO_AGENT_API_KEY`),
+  and it changes nothing about the deterministic safety contract.

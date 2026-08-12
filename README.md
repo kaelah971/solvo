@@ -46,6 +46,8 @@ No secrets appear in this repository.
 - M8 S1 deterministic agent core
 - M8 S2 optional model provider layer
 - M8 S3 Telegram conversational UX
+- M9 agent hardening / real-world language QA (216-phrase corpus, mutation
+  and tolerance hardening, live-style treasury phrases)
 
 **M8 S3 shipped scope (exactly what is implemented and tested):**
 
@@ -71,7 +73,6 @@ No secrets appear in this repository.
 
 ### Next
 
-- M9 agent hardening / real-world language QA
 - M10 natural-language batch/distribute
 - M11 smarter claim links
 - M12 web admin dashboard

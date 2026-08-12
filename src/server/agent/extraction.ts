@@ -205,8 +205,9 @@ const UNSAFE_MARKERS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
   { pattern: /post (a |an )?(url|request|to|a request)/i, flag: "url_instruction" },
   { pattern: /\buse webhook admin\b|\bwebhook admin\b/i, flag: "webhook_instruction" },
   { pattern: /drain (the |my |our )?wallet/i, flag: "drain_wallet" },
-  { pattern: /mark (this |the |it |my )?(transaction|payment|payout)?\s*(as )?(successful|completed)/i, flag: "fabricate_success" },
+  { pattern: /mark (this |the |it |my )?(transaction|payment|payout)?\s*(as )?(successful|completed|done)/i, flag: "fabricate_success" },
   { pattern: /fake (a |the )?(transaction|tx|hash|receipt|proof)/i, flag: "fabricate_success" },
+  { pattern: /approve (it|this|that) (yourself|for me)|approve (the |my )?(payment|payout|request) (yourself|for me)|self[- ]?approve/i, flag: "approve_self" },
 ];
 
 // ── Local deterministic money grammar (mirror of keeperhub/amount.ts) ──────
