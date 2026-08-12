@@ -84,3 +84,14 @@
  GET / 200 in 640ms (next.js: 115ms, application-code: 525ms)
  GET / 200 in 118ms (next.js: 19ms, application-code: 99ms)
  GET / 200 in 653ms (next.js: 18ms, application-code: 634ms)
+  Reload env: .env
+  Reload env: .env
+ GET / 200 in 1312ms (next.js: 667ms, application-code: 645ms)
+ GET / 200 in 193ms (next.js: 44ms, application-code: 148ms)
+  Reload env: .env
+ GET / 200 in 383ms (next.js: 207ms, application-code: 176ms)
+  Reload env: .env
+ GET / 200 in 363ms (next.js: 234ms, application-code: 129ms)
+  Reload env: .env
+ GET / 200 in 265ms (next.js: 136ms, application-code: 128ms)
+ GET / 200 in 265ms (next.js: 134ms, application-code: 130ms)

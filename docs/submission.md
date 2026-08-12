@@ -58,11 +58,38 @@ Modes:
 
 ## Deployed URL
 
-<To be filled after deployment — see Deployment below>
-
-- Web: https://<deployed-domain>
-- Telegram webhook: https://<deployed-domain>/api/telegram/webhook
+- Web: https://solvo-beryl.vercel.app
+- Telegram webhook: https://solvo-beryl.vercel.app/api/telegram/webhook
 - Bot: https://t.me/SolvoAgentBot
+
+## Final judge proof — REAL public self-serve Judge Mode (2026-08-12)
+
+A real public self-serve Judge Mode payment was completed end-to-end on the
+deployed app with **no founder intervention**: any Telegram user opened
+@SolvoAgentBot and ran `/judgepay`.
+
+- Execution ID: `gynx68ewlsliieojk33dg`
+- TX hash: `0x81b61704780fa0d8a983bf15d01c6043ee7f42cd730499649de23137d932c25c`
+- BaseScan: https://basescan.org/tx/0x81b61704780fa0d8a983bf15d01c6043ee7f42cd730499649de23137d932c25c
+- Amount: 0.01 USDC (exactly 10,000 base units)
+- Recipient: `0x76D7a718CcDc1c132c52D4C05eA0c2FA8e657486`
+- Status: completed
+- Payout ID: `3d8826cd-4ed3-45b5-ba6d-22a0286d6db8` (source `judge_telegram`,
+  workspace mode `judge`)
+- Verified read-only (`npm run judge:verify-proof`):
+  - Supabase: source `judge_telegram`, amount 10,000 base units, recipient,
+    execution ID and tx hash all match; `public=true` audit flag (public
+    self-serve policy path); one `execution_attempt`, `attempt_count=1`, one
+    `execution_submitted` + one `execution_completed` — no duplicate execution.
+  - KeeperHub: status `completed`, type `transfer`, receipt `verified=true`,
+    receiptStatus `success`, chain 8453, block 49,869,576, gas 67,350.
+  - Base mainnet: receipt `0x1` (success), tx chainId 8453, canonical Base
+    USDC Transfer (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`) of exactly
+    10,000 base units to the matching recipient, sender = configured
+    KeeperHub wallet.
+  - Caps: today's judge spend 0 → 0.01 USDC (cap 0.25); the requesting
+    Telegram user now has 1/1 successful payments and is capped from another
+    public judge success.
 
 ## Final judge test procedure (self-serve)
 

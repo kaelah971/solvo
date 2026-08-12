@@ -21,6 +21,7 @@
     "telegram:set-webhook": "node scripts/telegram-set-webhook.ts",
     "telegram:clear-webhook": "node scripts/telegram-clear-webhook.ts",
     "judge:doctor": "node scripts/judge-doctor.ts",
+    "judge:verify-proof": "node scripts/judge-verify-proof.ts",
     "telegram:commands": "node scripts/telegram-command-menu.ts",
     "m3:verify-proof": "node scripts/m3-verify-proof.ts",
     "m5:verify-proof": "node scripts/verify-m5-batch.ts"

@@ -239,4 +239,43 @@ Open the returned link (`https://basescan.org/tx/<hash>`) and confirm:
 - No claim links, CSV upload, or dashboard (later milestones).
 - Webhook mode requires a public HTTPS URL (Vercel recommended).
 
+## Real public judge proof (2026-08-12)
+
+A real public self-serve Judge Mode payment completed end-to-end on the
+deployed app with no founder intervention. Re-run the read-only proof at any
+time:
+
+```
+npm run judge:verify-proof
+```
+
+(Read-only: Supabase SELECTs, KeeperHub `get_direct_execution_status` only,
+public Base RPC. It never calls `execute_transfer` and never writes.)
+
+- Deployed app: https://solvo-beryl.vercel.app
+- Bot: https://t.me/SolvoAgentBot
+- Flow: any Telegram user → `/judgepay 0x76D7…486 0.01 USDC` → auto-approved
+  by the public judge policy → KeeperHub simulated and executed → proof
+  returned. No allowlist, no founder involvement.
+- Execution ID: `gynx68ewlsliieojk33dg`
+- TX hash: `0x81b61704780fa0d8a983bf15d01c6043ee7f42cd730499649de23137d932c25c`
+- BaseScan: https://basescan.org/tx/0x81b61704780fa0d8a983bf15d01c6043ee7f42cd730499649de23137d932c25c
+- Amount: 0.01 USDC (exactly 10,000 base units)
+- Recipient: `0x76D7a718CcDc1c132c52D4C05eA0c2FA8e657486`
+- Status: completed
+- Payout ID: `3d8826cd-4ed3-45b5-ba6d-22a0286d6db8` (source `judge_telegram`,
+  workspace mode `judge`, item `5be5dced-ff11-4f65-83e1-18bd6e4db388`)
+- Cross-verification (all agree):
+  - Supabase: `judge_telegram`, 10,000 base units, recipient/execution/tx
+    match, `public=true` audit flag, one execution attempt, `attempt_count=1`,
+    single `execution_submitted`/`execution_completed` pair — no duplicate
+    execution.
+  - KeeperHub: `completed`, transfer, receipt `verified=true` /
+    `success`, chain 8453, block 49,869,576, gas 67,350, sponsored.
+  - Base mainnet: receipt `0x1`, tx chainId 8453, one canonical Base USDC
+    Transfer of exactly 10,000 base units to the matching recipient, sender =
+    configured KeeperHub wallet.
+  - Caps: daily judge spend 0 → 0.01 USDC (cap 0.25 USDC); the requester now
+    has 1/1 successful payments and is capped from a second public success.
+
 No credentials appear in this document.

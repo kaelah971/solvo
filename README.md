@@ -1,5 +1,37 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Solvo — KeeperHub "The Last Mile" Hackathon Submission
+
+Solvo is a conversational treasury execution agent: a payment instruction
+becomes a validated, simulated, executed and independently provable Base USDC
+transaction through KeeperHub.
+
+- **Web:** https://solvo-beryl.vercel.app
+- **Bot:** https://t.me/SolvoAgentBot
+- **Submission doc:** `docs/submission.md` (proof links, judge test
+  procedure, demo script, safety notes)
+- **Judge Mode:** `docs/m6-judge-mode-deployment.md`
+
+**Real proof links (Base mainnet, chain 8453):**
+
+- M5 batch (2 recipients, 0.02 USDC aggregate):
+  https://basescan.org/tx/0x94323245ce213e6038e7a0b937aa62a73d5b46af962c2509a00f688b38ac8dda
+  and
+  https://basescan.org/tx/0x9d7d9503dcc716bb6a9192d0e8f80bc9a7483c51c342f98f1f735e2422212071
+- Final public self-serve judge proof (0.01 USDC):
+  https://basescan.org/tx/0x81b61704780fa0d8a983bf15d01c6043ee7f42cd730499649de23137d932c25c
+
+**Read-only verification:**
+
+```bash
+npm run m3:verify-proof   # M1/M3 direct execution proof
+npm run m5:verify-proof   # M5 batch proof
+npm run judge:verify-proof  # final public judge proof
+npm run judge:doctor      # judge readiness (no payments)
+```
+
+No secrets appear in this repository.
+
 ## Getting Started
 
 First, run the development server:
