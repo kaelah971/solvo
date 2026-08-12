@@ -42,7 +42,7 @@ export type SanitizedWorkspaceContext = {
   mode: WorkspaceMode;
   chainId: string;
   tokenAddress: string;
-  aliases: string[];
+  aliases: readonly string[];
   perTransactionLimitUsdc: string | null;
   dailyLimitUsdc: string | null;
   workspaceActive: boolean;
@@ -168,13 +168,14 @@ export type PaymentRecipient = {
 };
 
 /** Canonical missing-field keys. */
-export type MissingFieldKey = "amount" | "recipient" | "currency" | "workspace";
+export type MissingFieldKey = "amount" | "recipient" | "currency" | "workspace" | "payout_id";
 
 export const MISSING_FIELD_KEYS: readonly MissingFieldKey[] = [
   "amount",
   "recipient",
   "currency",
   "workspace",
+  "payout_id",
 ];
 
 export type PaymentIntent = {

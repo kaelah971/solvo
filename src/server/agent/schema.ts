@@ -297,7 +297,13 @@ export function validateAgentInterpretation(raw: unknown): ValidationResult<Agen
   const intentResult = validatePaymentIntent(raw.intent);
   if (!intentResult.ok) return intentResult;
   if (!isAgentIntentKind(raw.intentKind)) return fail("interpretation.intentKind: unknown intent kind");
-  if (raw.intentKind !== classifyAgentAction(intentResult.value.action)) {
+  if (raw.intentKind === "clarify_missing_fields") {
+    // Clarification is a safe bounded outcome: the action keeps its nature
+    // (pay / claim_pay / status) while missingFields records what is needed.
+    if (intentResult.value.missingFields.length === 0) {
+      return fail("interpretation.intentKind: clarify_missing_fields requires non-empty missingFields");
+    }
+  } else if (raw.intentKind !== classifyAgentAction(intentResult.value.action)) {
     return fail(`interpretation.intentKind: must be ${classifyAgentAction(intentResult.value.action)} for action ${intentResult.value.action}`);
   }
   if (!isString(raw.summary) || raw.summary.length === 0 || raw.summary.length > SUMMARY_MAX_LENGTH) {

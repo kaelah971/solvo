@@ -341,6 +341,24 @@ describe("agent schema contracts", () => {
       const result = validateAgentInterpretation({ ...validInterpretation(), provider: "" });
       assert.equal(result.ok, false);
     });
+
+    it("accepts a clarify_missing_fields intent with non-empty missing fields", () => {
+      const intent: PaymentIntent = { ...validIntent(), action: "pay", amount: null, recipient: null, missingFields: ["amount", "recipient"] };
+      const result = validateAgentInterpretation({ ...validInterpretation(), intent, intentKind: "clarify_missing_fields" });
+      assert.equal(result.ok, true);
+    });
+
+    it("rejects a clarify_missing_fields intent without missing fields", () => {
+      const result = validateAgentInterpretation({ ...validInterpretation(), intentKind: "clarify_missing_fields" });
+      assert.equal(result.ok, false);
+      assert.match(result.reason, /missingFields/);
+    });
+
+    it("accepts payout_id as a missing-field key", () => {
+      const intent: PaymentIntent = { ...validIntent(), action: "status", amount: null, currency: null, recipient: null, missingFields: ["payout_id"] };
+      const result = validateAgentInterpretation({ ...validInterpretation(), intent, intentKind: "clarify_missing_fields" });
+      assert.equal(result.ok, true);
+    });
   });
 
   describe("AgentPlan validation", () => {
