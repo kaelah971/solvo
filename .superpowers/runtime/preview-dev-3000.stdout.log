@@ -76,3 +76,11 @@
  GET / 200 in 180ms (next.js: 7ms, application-code: 174ms)
  GET /payments/new 404 in 4.1s (next.js: 3.3s, application-code: 739ms)
  GET / 200 in 710ms (next.js: 359ms, application-code: 350ms)
+  Reload env: .env
+  Reload env: .env
+✓ Compiled in 1622ms
+ GET / 200 in 2.5s (next.js: 1160ms, application-code: 1330ms)
+ GET / 200 in 941ms (next.js: 170ms, application-code: 770ms)
+ GET / 200 in 640ms (next.js: 115ms, application-code: 525ms)
+ GET / 200 in 118ms (next.js: 19ms, application-code: 99ms)
+ GET / 200 in 653ms (next.js: 18ms, application-code: 634ms)
