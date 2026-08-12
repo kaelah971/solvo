@@ -273,6 +273,19 @@ describe("prepare-batch-payment bridge", () => {
     assert.equal((await fixture.repo.getPayoutItemsByPayoutId(created[0].payoutId)).length, 2);
   });
 
+  it("13b. duplicate delivery after the payout state changed reads the current state truthfully", async () => {
+    const fixture = await makeFixture();
+    const input = inputFor(fixture, batchDecision());
+    const first = await bridgePreparedBatchPayment(input, { repo: fixture.repo });
+    await fixture.repo.transitionPayoutState(first.payoutId, ["pending_approval"], "approved");
+    const second = await bridgePreparedBatchPayment(input, { repo: fixture.repo });
+    assert.equal(second.outcome, "existing");
+    assert.equal(second.payoutId, first.payoutId);
+    assert.equal(second.state, "approved");
+    assert.equal(second.approvalRequired, false);
+    assert.equal((await fixture.repo.getPayoutItemsByPayoutId(first.payoutId)).length, 2);
+  });
+
   it("14. rejects non-prepared_batch_payment decisions with no artifact", async () => {
     const fixture = await makeFixture();
     for (const decision of [

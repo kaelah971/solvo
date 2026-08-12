@@ -105,7 +105,7 @@ export async function runAgentOrchestration(input: AgentServiceInput, deps: Agen
       "Agent-run limit reached for this hour or day.",
     );
     if (limited.existing) {
-      return { outcome: "duplicate", payoutId: limited.run.payout_id, claimId: limited.run.claim_id };
+      return duplicateServiceResult(deps, limited.run);
     }
     return {
       outcome: "rate_limited",
@@ -119,7 +119,7 @@ export async function runAgentOrchestration(input: AgentServiceInput, deps: Agen
   // bridges are never re-run.
   const created = await createOrReuseRun(deps, agentInput, idempotencyKey, workspace, "received");
   if (created.existing) {
-    return { outcome: "duplicate", payoutId: created.run.payout_id, claimId: created.run.claim_id };
+    return duplicateServiceResult(deps, created.run);
   }
   const run = created.run;
   await appendAudit(deps, workspace, "agent_run_started", { agentRunId: run.id, provider: run.provider });
@@ -300,6 +300,53 @@ async function createOrReuseRun(
     return { existing: false, run };
   });
   return persisted;
+}
+
+/**
+ * Duplicate-delivery result. For a previously recorded BATCH run the result
+ * carries an "existing" prepared_batch view loaded from the payout row, so
+ * the reply can be truthful about the CURRENT state (including after the
+ * batch left pending_approval). Everything else keeps the generic duplicate
+ * outcome. Never re-runs a bridge and never creates artifacts.
+ */
+async function duplicateServiceResult(deps: AgentServiceDeps, run: AgentRunRow): Promise<AgentServiceResult> {
+  if (run.payout_id !== null && run.decision_type === "prepared_batch_payment") {
+    const payout = await deps.repo.getPayoutById(run.payout_id);
+    if (payout) {
+      const items = await deps.repo.getPayoutItemsByPayoutId(payout.id);
+      const storedMemo = isRecord(run.decision_json) ? run.decision_json.memo : null;
+      const memo = typeof storedMemo === "string" ? storedMemo : null;
+      return {
+        outcome: "prepared_batch_payment",
+        prepared: {
+          outcome: "existing",
+          payoutId: payout.id,
+          itemCount: items.length,
+          totalAmountBaseUnits: payout.total_amount_base_units,
+          recipients: items.map((item) => ({
+            label: item.memo ?? shortAddress(item.recipient_address),
+            address: item.recipient_address,
+            amountBaseUnits: item.amount_base_units,
+            memo: null,
+          })),
+          memo,
+          state: payout.status,
+          approvalRequired: payout.status === "pending_approval",
+          buttons: [],
+        },
+      };
+    }
+  }
+  return { outcome: "duplicate", payoutId: run.payout_id, claimId: run.claim_id };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Display-only short address label for duplicate views without a memo. */
+function shortAddress(address: string): string {
+  return `${address.slice(0, 10)}…`;
 }
 
 async function terminalRun(

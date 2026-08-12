@@ -241,7 +241,7 @@ export async function bridgePreparedBatchPayment(
     })),
     memo: prepared.memo,
     state: persisted.payout.status,
-    approvalRequired: true,
+    approvalRequired: persisted.payout.status === "pending_approval",
     buttons: [
       { text: "APPROVE BATCH", callbackData: approvalCallbackData("approve", persisted.payout.id) },
       { text: "REJECT", callbackData: approvalCallbackData("reject", persisted.payout.id) },

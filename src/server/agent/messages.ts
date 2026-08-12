@@ -141,9 +141,13 @@ function preparedPaymentMessage(result: Extract<AgentServiceResult, { outcome: "
 
 function preparedBatchMessage(result: Extract<AgentServiceResult, { outcome: "prepared_batch_payment" }>): AgentFormattedReply {
   const prepared = result.prepared;
+  if (prepared.outcome === "existing") {
+    return duplicateBatchMessage(prepared);
+  }
   const lines = [
     "BATCH PAYMENT REQUEST PREPARED",
     "",
+    `PAYOUT ID     ${prepared.payoutId}`,
     `RECIPIENTS    ${prepared.itemCount}`,
     `TOTAL         ${baseUnitsToUsdc(prepared.totalAmountBaseUnits)} USDC`,
     "STATUS        APPROVAL REQUIRED",
@@ -161,6 +165,34 @@ function preparedBatchMessage(result: Extract<AgentServiceResult, { outcome: "pr
     "KeeperHub execution happens only after approval.",
   );
   return { text: lines.join("\n"), buttons: prepared.buttons };
+}
+
+/**
+ * Duplicate delivery of the same batch message. Reads the CURRENT payout row
+ * state so the reply is truthful even after the batch left pending_approval.
+ * No buttons are re-attached — the original message carries them and the
+ * request was already recorded.
+ */
+function duplicateBatchMessage(prepared: Extract<AgentServiceResult, { outcome: "prepared_batch_payment" }>["prepared"]): AgentFormattedReply {
+  const lines = [
+    "BATCH PAYMENT REQUEST ALREADY PREPARED",
+    "",
+    `PAYOUT ID     ${prepared.payoutId}`,
+    `STATE         ${prepared.state.toUpperCase()}`,
+    `RECIPIENTS    ${prepared.itemCount}`,
+    `TOTAL         ${baseUnitsToUsdc(prepared.totalAmountBaseUnits)} USDC`,
+    "",
+    "No duplicate batch was created.",
+  ];
+  if (prepared.state === "pending_approval") {
+    lines.push(
+      "No funds have moved.",
+      "An owner or approver must approve before anything executes.",
+    );
+  } else {
+    lines.push(`This batch is currently ${prepared.state}.`);
+  }
+  return { text: lines.join("\n") };
 }
 
 function claimLinkMessage(result: Extract<AgentServiceResult, { outcome: "claim_link_created" }>): AgentFormattedReply {
@@ -212,6 +244,9 @@ function unsupportedMessage(reason: string): string {
     "",
     "Examples you can use:",
     "  Send 0.01 USDC to 0x...",
+    "  Pay blossom and endurance 0.01 USDC each",
+    "  Split 0.06 USDC between blossom, endurance, and mike",
+    "  Pay blossom 0.01 USDC and endurance 0.02 USDC",
     "  Pay blossom 0.01 USDC",
     "  Create a claim link for 0.05 USDC",
     "  Check status <payment-id>",

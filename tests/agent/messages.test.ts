@@ -11,6 +11,30 @@ const ADDRESS = "0x742d35cc6634c0532925a3b844bc454e4438f44e";
 const CLAIM_URL = "https://solvo.example/claim/abcdefghijklmnopqrstuvwxyz012345";
 const STATUS_UUID = "550e8400-e29b-41d4-a716-446655440000";
 
+function batchResult(overrides: Partial<Extract<AgentServiceResult, { outcome: "prepared_batch_payment" }>["prepared"]> = {}): AgentServiceResult {
+  return {
+    outcome: "prepared_batch_payment",
+    prepared: {
+      outcome: "created",
+      payoutId: PAYOUT_ID,
+      itemCount: 2,
+      totalAmountBaseUnits: "20000",
+      recipients: [
+        { label: "blossom", address: "0x1234567890abcdef1234567890abcdef12345678", amountBaseUnits: "10000", memo: null },
+        { label: "endurance", address: "0x234567890abcdef1234567890abcdef123456789", amountBaseUnits: "10000", memo: null },
+      ],
+      memo: null,
+      state: "pending_approval",
+      approvalRequired: true,
+      buttons: [
+        { text: "APPROVE BATCH", callbackData: `approve:${PAYOUT_ID}` },
+        { text: "REJECT", callbackData: `reject:${PAYOUT_ID}` },
+      ],
+      ...overrides,
+    },
+  };
+}
+
 const BANNED_INTERNAL = [
   "tool",
   "planner",
@@ -208,6 +232,85 @@ describe("agent reply builders", () => {
     assertSafe(reply2.text, "prepared payment without memo");
   });
 
+  it("fresh batch reply shows the header, payout id, recipients, total, and approval gate", () => {
+    const reply = formatAgentServiceResult(batchResult());
+    assert.match(reply.text, /BATCH PAYMENT REQUEST PREPARED/i);
+    assert.match(reply.text, /PAYOUT ID/i);
+    assert.ok(reply.text.includes(PAYOUT_ID));
+    assert.match(reply.text, /RECIPIENTS/i);
+    assert.match(reply.text, /blossom/i);
+    assert.match(reply.text, /endurance/i);
+    assert.match(reply.text, /0\.01 USDC/i);
+    assert.match(reply.text, /TOTAL/i);
+    assert.match(reply.text, /0\.02 USDC/i);
+    assert.match(reply.text, /approval required/i);
+    assert.match(reply.text, /no funds have moved/i);
+    assert.match(reply.text, /owner or approver must approve before anything executes/i);
+    assert.match(reply.text, /keeperhub execution happens only after approval/i);
+    assert.equal(reply.buttons?.length, 2);
+    assert.equal(reply.buttons?.[0].text, "APPROVE BATCH");
+    assert.equal(reply.buttons?.[1].text, "REJECT");
+    assert.equal(/\bpaid\b|completed|\bsent\b|executed|proof|0x[0-9a-fA-F]{64}/i.test(reply.text), false);
+    assertSafe(reply.text, "fresh batch");
+  });
+
+  it("batch reply shows the memo line only when a memo is present", () => {
+    const withMemo = formatAgentServiceResult(batchResult({ memo: "design bounty" }));
+    assert.match(withMemo.text, /MEMO/i);
+    assert.match(withMemo.text, /design bounty/i);
+    assertSafe(withMemo.text, "batch with memo");
+
+    const withoutMemo = formatAgentServiceResult(batchResult({ memo: null }));
+    assert.equal(withoutMemo.text.includes("MEMO"), false);
+    assertSafe(withoutMemo.text, "batch without memo");
+  });
+
+  it("duplicate batch reply says ALREADY PREPARED with the same payout id and no duplicate buttons", () => {
+    const reply = formatAgentServiceResult(
+      batchResult({ outcome: "existing", approvalRequired: true, buttons: [] }),
+    );
+    assert.match(reply.text, /BATCH PAYMENT REQUEST ALREADY PREPARED/i);
+    assert.ok(reply.text.includes(PAYOUT_ID));
+    assert.match(reply.text, /STATE/i);
+    assert.match(reply.text, /PENDING_APPROVAL/i);
+    assert.match(reply.text, /RECIPIENTS/i);
+    assert.match(reply.text, /0\.02 USDC/i);
+    assert.match(reply.text, /no duplicate batch was created/i);
+    assert.match(reply.text, /no funds have moved/i);
+    assert.equal(reply.buttons, undefined);
+    assertSafe(reply.text, "duplicate batch");
+  });
+
+  it("duplicate batch reply after the state changed is truthful from the payout row", () => {
+    const pending = formatAgentServiceResult(batchResult({ outcome: "existing", state: "pending_approval", approvalRequired: true, buttons: [] }));
+    assert.match(pending.text, /no funds have moved/i);
+
+    const approved = formatAgentServiceResult(batchResult({ outcome: "existing", state: "approved", approvalRequired: false, buttons: [] }));
+    assert.match(approved.text, /STATE/i);
+    assert.match(approved.text, /APPROVED/i);
+    assert.match(approved.text, /currently approved/i);
+    assert.equal(/no funds have moved/i.test(approved.text), false);
+
+    const completed = formatAgentServiceResult(batchResult({ outcome: "existing", state: "completed", approvalRequired: false, buttons: [] }));
+    assert.match(completed.text, /currently completed/i);
+    assert.equal(/\bpaid\b|transferred/i.test(completed.text), false);
+  });
+
+  it("blocked unsupported copy includes safe batch examples", () => {
+    const reply = formatAgentServiceResult({ outcome: "unsupported", reason: "Instruction contains unsafe text." });
+    assert.match(reply.text, /Pay blossom and endurance 0\.01 USDC each/i);
+    assert.match(reply.text, /Split 0\.06 USDC between blossom, endurance, and mike/i);
+    assert.match(reply.text, /Pay blossom 0\.01 USDC and endurance 0\.02 USDC/i);
+    assert.match(reply.text, /Pay blossom 0\.01 USDC/i);
+    assert.match(reply.text, /Create a claim link for 0\.05 USDC/i);
+    assert.match(reply.text, /Check status <payment-id>/i);
+    assert.equal(reply.text.includes("planner"), false);
+    assert.equal(reply.text.includes("schema"), false);
+    assert.equal(reply.text.includes("model"), false);
+    assert.equal(reply.text.includes("json"), false);
+    assertSafe(reply.text, "unsupported batch examples");
+  });
+
   it("claim link copy explains the recipient wallet step and the exact-destination approval gate", () => {
     const result: AgentServiceResult = {
       outcome: "claim_link_created",
@@ -384,6 +487,7 @@ describe("agent reply builders", () => {
         outcome: "prepared_payment",
         prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: null, state: "pending_approval", approvalRequired: true, memo: null, buttons: [] },
       },
+      batchResult(),
       {
         outcome: "claim_link_created",
         claim: { outcome: "created", claimId: CLAIM_ID, claimUrl: CLAIM_URL, tokenPrefix: "abcdefgh", amountBaseUnits: "50000", currencySymbol: "USDC", chainId: "8453", tokenAddress: "0x", expiresAt: "2026-08-19T13:00:00.000Z", state: "created", approvalBehavior: "x" },
@@ -412,6 +516,8 @@ describe("agent reply builders", () => {
         outcome: "prepared_payment",
         prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: "daniel", state: "pending_approval", approvalRequired: true, memo: null, buttons: [] },
       },
+      batchResult(),
+      batchResult({ outcome: "existing", state: "approved", approvalRequired: false, buttons: [] }),
       {
         outcome: "claim_link_created",
         claim: { outcome: "created", claimId: CLAIM_ID, claimUrl: CLAIM_URL, tokenPrefix: "abcdefgh", amountBaseUnits: "50000", currencySymbol: "USDC", chainId: "8453", tokenAddress: "0x", expiresAt: "2026-08-19T13:00:00.000Z", state: "created", approvalBehavior: "x" },

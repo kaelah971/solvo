@@ -363,6 +363,47 @@ updated **in the same commit** that implements the behavior.
 | Message-length abuse (huge recipient lists) | NL cap 10 recipients + existing input-length cap |
 | Claim-batch scope creep | Explicitly deferred to M11/M10.x with no mixed decision shape |
 
+## M10.6 Telegram UX (implemented)
+
+- **Fresh batch reply** (`preparedBatchMessage` in `src/server/agent/messages.ts`):
+  `BATCH PAYMENT REQUEST PREPARED` with `PAYOUT ID`, recipients count, one
+  line per recipient (label + USDC), total, `STATUS APPROVAL REQUIRED`, the
+  memo line when a reason was given, then "No funds have moved." / "An owner
+  or approver must approve before anything executes." / "KeeperHub execution
+  happens only after approval." Buttons: `APPROVE BATCH` / `REJECT` (existing
+  safe callback builder). Never says sent/paid/completed/executed as fact,
+  never shows a tx hash or proof.
+- **Duplicate-delivery behavior:** re-delivery of the same Telegram message
+  short-circuits at the run idempotency layer and returns an "existing"
+  batch view loaded from the payout row — the reply becomes
+  `BATCH PAYMENT REQUEST ALREADY PREPARED` with the SAME payout id, the
+  CURRENT state, recipients count and total. No duplicate payout_items, no
+  duplicate `request_created`/`approval_required` audits, and NO buttons are
+  re-attached (the original message carries them). "No funds have moved." is
+  shown only while the state is still `pending_approval`; after approval the
+  reply truthfully reports the current state from the payout row
+  ("This batch is currently approved."). The bridge's own duplicate path
+  returns the same truthful state (`approvalRequired` reflects the payout
+  state, not a hardcoded flag).
+- **Blocked/unsupported copy:** the shared unsupported message keeps its
+  safe example shapes and now also lists batch examples ("Pay blossom and
+  endurance 0.01 USDC each", "Split 0.06 USDC between blossom, endurance,
+  and mike", "Pay blossom 0.01 USDC and endurance 0.02 USDC") — all
+  user-facing, no internal terms (planner/schema/model/provider/json/agent
+  run/execution service/tool never appear).
+- **Button behavior:** approve/reject buttons exist only on the fresh reply;
+  duplicates, blocked, unsupported, and failed replies carry none. The
+  callbacks route to the existing M5 approval pipeline (unchanged).
+- **Truthfulness/no-execution copy:** every batch reply passes the
+  banned-term and no-hash/proof/completed checks; completion claims appear
+  only when sourced from the payout row's execution state (status/duplicate
+  views).
+- **No Judge/private batch behavior:** judge-like phrases and Judge-mode
+  chats stay out of the agent flow; DM/private chats are inert (no run, no
+  payout, no claim); hostile batch mutations decline with safe copy and zero
+  artifacts; slash `/batch` still bypasses the agent; disabled mode stays
+  inert.
+
 ## M10.5 bridge (implemented)
 
 - **Valid parsed/planned batches now persist as `pending_approval` batch
