@@ -172,6 +172,8 @@ function statusVisibleMessage(result: Extract<AgentServiceResult, { outcome: "st
   ];
   if (status.completedAt !== null) {
     lines.push(`COMPLETED    ${status.completedAt}`);
+  } else if (status.state === "pending_approval") {
+    lines.push("", "Waiting for approval by an owner or approver. No funds have moved.");
   }
   return { text: lines.join("\n") };
 }
