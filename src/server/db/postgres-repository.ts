@@ -827,13 +827,15 @@ export class PostgresRepository implements SolvoRepository {
     const rows = await this.sql<RawRow[]>`
       INSERT INTO agent_runs (
         workspace_id, surface, telegram_chat_id, telegram_user_id, telegram_message_id,
-        idempotency_key, provider, status, input_hash, raw_text_redacted, candidates_json, started_at
+        idempotency_key, provider, status, input_hash, raw_text_redacted, candidates_json,
+        started_at, error_code, error_message_redacted
       ) VALUES (
         ${input.workspaceId}, ${input.surface}, ${input.telegramChatId}, ${input.telegramUserId},
         ${input.telegramMessageId}, ${input.idempotencyKey}, ${input.provider},
         ${input.status ?? "received"}, ${input.inputHash}, ${input.rawTextRedacted ?? null},
         ${this.sql.json((input.candidatesJson ?? {}) as JsonParam)},
-        COALESCE(${input.startedAt ?? null}, clock_timestamp())
+        COALESCE(${input.startedAt ?? null}, clock_timestamp()),
+        ${input.errorCode ?? null}, ${input.errorMessageRedacted ?? null}
       )
       RETURNING *
     `;

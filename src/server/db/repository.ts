@@ -105,6 +105,8 @@ export type CreateAgentRunInput = {
   candidatesJson?: Record<string, unknown> | null;
   /** Optional caller-supplied start time; defaults to the DB clock. */
   startedAt?: string | null;
+  errorCode?: string | null;
+  errorMessageRedacted?: string | null;
 };
 
 export type UpdateAgentRunInput = {
