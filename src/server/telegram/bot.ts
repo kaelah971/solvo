@@ -13,6 +13,7 @@ import { handleCommunityPayInstruction } from "./flows/community-pay-flow.ts";
 import { handleCommunityBatchInstruction } from "./flows/community-batch-flow.ts";
 import { handleJudgePayInstruction } from "./flows/judge-flow.ts";
 import { handleClaimPayInstruction } from "./flows/claim-flow.ts";
+import { handleAgentGroupText } from "./flows/agent-flow.ts";
 import { handleClaimApprovalCallbackUpdate } from "./flows/claim-approval-orchestration.ts";
 import { handleApprovalCallbackUpdate } from "./flows/approval-orchestration.ts";
 import { parseCallbackData, type ParsedCallbackData } from "./community-messages.ts";
@@ -227,6 +228,7 @@ async function handleGroupText(
   deps: HandlerDeps,
   allowedDevUserIds: ReadonlySet<string>,
 ): Promise<void> {
+  const text = ctx.message?.text ?? "";
   if (parsed.kind === "start") {
     await ctx.reply(startMessage());
     return;
@@ -236,6 +238,24 @@ async function handleGroupText(
     return;
   }
   if (parsed.kind === "failure") {
+    // M8 agent entry: only NON-command text that the deterministic parser
+    // rejects may reach the agent orchestration flow (feature-flagged and
+    // community-only inside agent-flow). Slash text keeps the existing reply.
+    if (!text.startsWith("/")) {
+      const agentReply = await handleAgentGroupText({ user, text }, { repo: deps.repo });
+      if (agentReply) {
+        if (agentReply.buttons && agentReply.buttons.length > 0) {
+          const keyboard = new InlineKeyboard();
+          for (const button of agentReply.buttons) {
+            keyboard.text(button.text, button.callbackData);
+          }
+          await ctx.reply(agentReply.text, { reply_markup: keyboard });
+        } else {
+          await ctx.reply(agentReply.text);
+        }
+        return;
+      }
+    }
     await ctx.reply(`${parsed.reason}\n\n${parsed.hint}`);
     return;
   }
