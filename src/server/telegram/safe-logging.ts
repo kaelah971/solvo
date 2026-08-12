@@ -16,7 +16,9 @@ const KEEPERHUB_KEY_PATTERN = /\bkh_[A-Za-z0-9_-]{8,}\b/g;
 // reach persistent logs or telemetry. A claim URL is only ever shown
 // intentionally to its requester at creation time. Matches "claim/<token>"
 // with or without a leading slash (URLs, JSON payloads, bare references).
-const CLAIM_URL_PATTERN = /\bclaim\/[A-Za-z0-9_-]{32}\b/g;
+// The trailing lookahead (not \b) is deliberate: base64url tokens may end
+// with "-", a non-word char that would defeat a trailing word boundary.
+const CLAIM_URL_PATTERN = /\bclaim\/[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/g;
 
 function configuredSecrets(): string[] {
   const secrets: string[] = [];

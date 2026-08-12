@@ -2,7 +2,36 @@
 
 Date: 2026-08-13
 Branch: `feature/smarter-claim-links`
-Status: **Design only. No implementation in this step.** (M11.1)
+Status: **Design + M11.2 read model implemented. Telegram/web UX not yet built.**
+
+## M11.2 read model (implemented)
+
+Implemented in `src/server/claim/status.ts` (tests: `tests/claim/claim-status.test.ts`).
+Read-only claim status service; no M11.3+ surfaces (Telegram `/claimstatus`, web
+polish, reissue, batches) are wired to it yet.
+
+- **Effective statuses** — `pending` (created, not expired), `claimed` (wallet
+  recorded, approval required), `approved` (payout/payment-prepared linked),
+  `rejected` (cancelled), `expired` (computed), `completed` (pipeline-confirmed),
+  `unknown` (unmappable/not-confirmable). The view always carries the honest
+  `storedStatus` next to `effectiveStatus`.
+- **Same-workspace/no-leak gate** — `getClaimStatusForMember` requires an ACTIVE
+  member of the same workspace and re-checks the repository member row (stale
+  member objects cannot bypass). Unknown claim id, wrong workspace, inactive
+  member, and non-member all collapse to the EXACT same frozen
+  `{ outcome: "not_found" }` result (`CLAIM_STATUS_NOT_FOUND`), so claim
+  existence never leaks across workspaces or members.
+- **Computed expiry** — only a `created` claim past `expires_at` reads as
+  `expired`; expiry is never persisted and never mutates the claim row.
+  Claimed/approved/executed/cancelled claims keep their state past the deadline.
+- **Pipeline-only proof** — `completed` + `txHash`/`txExplorerUrl` exist ONLY
+  when the linked payout is `completed` AND a payout item is `completed` with a
+  transaction hash. A stored `executed` claim without pipeline proof reads as
+  `unknown` with no hash. `agent_runs`, claim-row text, and forged metadata can
+  never produce proof.
+- **No mutation/read-only guarantee** — the read model creates no payout, claim,
+  audit, or execution rows and never calls KeeperHub, Telegram, webhooks, or any
+  model provider. Views are deterministic and JSON-serializable.
 
 ## Summary
 
