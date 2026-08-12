@@ -465,11 +465,20 @@ export class OpenAICompatibleIntentInterpreter implements IntentInterpreter {
 }
 
 /**
+ * Options for mapping an already-parsed AgentConfig onto the adapter.
+ */
+export type AgentConfigAdapterOptions = {
+  /** Injected fetch for deterministic tests; defaults to globalThis.fetch. */
+  fetch?: typeof fetch;
+};
+
+/**
  * Maps an already-parsed AgentConfig to the provider, rejecting a missing
  * key at construction time (fail closed before any message could be sent).
  */
 export function openAICompatibleFromAgentConfig(
   config: AgentConfig,
+  options: AgentConfigAdapterOptions = {},
 ): OpenAICompatibleIntentInterpreter {
   if (config.apiKey === null) {
     throw new AgentProviderError(
@@ -482,5 +491,7 @@ export function openAICompatibleFromAgentConfig(
     baseUrl: config.apiBaseUrl ?? DEFAULT_BASE_URL,
     model: config.model ?? DEFAULT_MODEL,
     timeoutMs: config.timeoutMs,
+    maxTokens: config.maxTokens,
+    fetch: options.fetch,
   });
 }

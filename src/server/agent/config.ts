@@ -24,6 +24,8 @@ export type AgentConfig = {
   provider: AgentProvider;
   /** Model call timeout budget in ms (500-15000). */
   timeoutMs: number;
+  /** Structured-output token cap for the model provider (1-16384). */
+  maxTokens: number;
   /** Maximum accepted raw input length in chars (100-5000). */
   maxInputChars: number;
   /** Per-user daily agent-run cap (1-1000). */
@@ -44,6 +46,7 @@ export type AgentConfigSummary = {
   enabled: boolean;
   provider: AgentProvider;
   timeoutMs: number;
+  maxTokens: number;
   maxInputChars: number;
   maxDailyRunsPerUser: number;
   maxHourlyRunsPerUser: number;
@@ -56,6 +59,7 @@ export type AgentConfigErrorCode =
   | "invalid_boolean"
   | "invalid_provider"
   | "invalid_timeout"
+  | "invalid_max_tokens"
   | "invalid_max_input_chars"
   | "invalid_daily_runs"
   | "invalid_hourly_runs"
@@ -77,6 +81,9 @@ export type AgentEnv = Record<string, string | undefined>;
 const DEFAULT_TIMEOUT_MS = 3000;
 const MIN_TIMEOUT_MS = 500;
 const MAX_TIMEOUT_MS = 15000;
+const DEFAULT_MAX_TOKENS = 500;
+const MIN_MAX_TOKENS = 1;
+const MAX_MAX_TOKENS = 16384;
 const DEFAULT_MAX_INPUT_CHARS = 1000;
 const MIN_MAX_INPUT_CHARS = 100;
 const MAX_MAX_INPUT_CHARS = 5000;
@@ -163,6 +170,14 @@ export function getAgentConfig(env: AgentEnv = process.env): AgentConfig {
     MAX_TIMEOUT_MS,
     "invalid_timeout",
   );
+  const maxTokens = parseIntInRange(
+    env.SOLVO_AGENT_MAX_TOKENS,
+    "SOLVO_AGENT_MAX_TOKENS",
+    DEFAULT_MAX_TOKENS,
+    MIN_MAX_TOKENS,
+    MAX_MAX_TOKENS,
+    "invalid_max_tokens",
+  );
   const maxInputChars = parseIntInRange(
     env.SOLVO_AGENT_MAX_INPUT_CHARS,
     "SOLVO_AGENT_MAX_INPUT_CHARS",
@@ -208,6 +223,7 @@ export function getAgentConfig(env: AgentEnv = process.env): AgentConfig {
     enabled,
     provider,
     timeoutMs,
+    maxTokens,
     maxInputChars,
     maxDailyRunsPerUser,
     maxHourlyRunsPerUser,
@@ -227,6 +243,7 @@ export function getAgentConfigSummary(config: AgentConfig): AgentConfigSummary {
     enabled: config.enabled,
     provider: config.provider,
     timeoutMs: config.timeoutMs,
+    maxTokens: config.maxTokens,
     maxInputChars: config.maxInputChars,
     maxDailyRunsPerUser: config.maxDailyRunsPerUser,
     maxHourlyRunsPerUser: config.maxHourlyRunsPerUser,

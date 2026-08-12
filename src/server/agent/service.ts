@@ -5,9 +5,9 @@ import { extractCandidates, type ExtractionResult } from "./extraction.ts";
 import type { IntentInterpreter } from "./interpreter.ts";
 import { safeInterpretation } from "./interpreter.ts";
 import { AgentPlanner, type AgentPlannerDecision } from "./planner.ts";
+import { createIntentInterpreter } from "./providers/factory.ts";
 import { hashAgentInput, redactAgentRawText } from "./redact.ts";
 import { validateAgentInput } from "./schema.ts";
-import { StaticIntentInterpreter } from "./static-interpreter.ts";
 import { agentStatusResult } from "./bridges/status-result.ts";
 import { bridgePreparedClaimLink, CreateClaimLinkBridgeError } from "./bridges/create-claim-link.ts";
 import { bridgePreparedPayment, PreparePaymentBridgeError } from "./bridges/prepare-payment.ts";
@@ -321,9 +321,12 @@ async function appendAudit(
   });
 }
 
-// Default interpreter fallback for callers that did not inject one.
+// Default interpreter fallback for callers that did not inject one: the
+// provider factory selects the implementation from config (static by
+// default; the real adapter only when provider=openai_compatible AND a key
+// exists — an openai_compatible config without a key fails closed here).
 export function defaultAgentDeps(repo: SolvoRepository, config: AgentConfig, appUrl: string): AgentServiceDeps {
-  return { repo, interpreter: new StaticIntentInterpreter(), config, appUrl };
+  return { repo, interpreter: createIntentInterpreter(config), config, appUrl };
 }
 
 export type { ExtractionResult };

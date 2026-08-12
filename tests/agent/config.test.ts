@@ -19,6 +19,7 @@ describe("agent configuration", () => {
     assert.equal(config.enabled, false);
     assert.equal(config.provider, "static");
     assert.equal(config.timeoutMs, 3000);
+    assert.equal(config.maxTokens, 500);
     assert.equal(config.maxInputChars, 1000);
     assert.equal(config.maxDailyRunsPerUser, 25);
     assert.equal(config.maxHourlyRunsPerUser, 10);
@@ -41,6 +42,7 @@ describe("agent configuration", () => {
         SOLVO_AGENT_ENABLED: "true",
         SOLVO_AGENT_PROVIDER: "static",
         SOLVO_AGENT_TIMEOUT_MS: "5000",
+        SOLVO_AGENT_MAX_TOKENS: "400",
         SOLVO_AGENT_MAX_INPUT_CHARS: "2000",
         SOLVO_AGENT_MAX_DAILY_RUNS_PER_USER: "50",
         SOLVO_AGENT_MAX_HOURLY_RUNS_PER_USER: "20",
@@ -50,10 +52,21 @@ describe("agent configuration", () => {
     assert.equal(config.enabled, true);
     assert.equal(config.provider, "static");
     assert.equal(config.timeoutMs, 5000);
+    assert.equal(config.maxTokens, 400);
     assert.equal(config.maxInputChars, 2000);
     assert.equal(config.maxDailyRunsPerUser, 50);
     assert.equal(config.maxHourlyRunsPerUser, 20);
     assert.equal(config.logLevel, "debug");
+  });
+
+  it("rejects invalid max tokens values", () => {
+    for (const value of ["abc", "0", "-1", "16385", "1.5"]) {
+      assert.throws(
+        () => getAgentConfig(env({ SOLVO_AGENT_MAX_TOKENS: value })),
+        (error: unknown) => error instanceof AgentConfigError && error.code === "invalid_max_tokens",
+        `max tokens ${value} must be rejected`,
+      );
+    }
   });
 
   it("rejects invalid booleans", () => {
@@ -186,6 +199,7 @@ describe("agent configuration", () => {
       "maxDailyRunsPerUser",
       "maxHourlyRunsPerUser",
       "maxInputChars",
+      "maxTokens",
       "model",
       "provider",
       "timeoutMs",
