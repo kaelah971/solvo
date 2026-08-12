@@ -11,6 +11,7 @@ import { validateAgentInput } from "./schema.ts";
 import { agentStatusResult } from "./bridges/status-result.ts";
 import { bridgePreparedClaimLink, CreateClaimLinkBridgeError } from "./bridges/create-claim-link.ts";
 import { bridgePreparedPayment, PreparePaymentBridgeError } from "./bridges/prepare-payment.ts";
+import { bridgePreparedBatchPayment, PrepareBatchPaymentBridgeError } from "./bridges/prepare-batch-payment.ts";
 import type { AgentInput, AgentInterpretation, MissingFieldKey } from "./types.ts";
 
 /**
@@ -19,7 +20,8 @@ import type { AgentInput, AgentInterpretation, MissingFieldKey } from "./types.t
  * The single application-owned flow that composes S1: config gate → input
  * validation → rate limit → idempotency → agent_run lifecycle (create →
  * extract → interpret → plan) → application bridges (prepare payment /
- * claim link / status) → terminal agent-run record → typed result.
+ * prepare batch / claim link / status) → terminal agent-run record → typed
+ * result.
  *
  * The service is DEFAULT-OFF (SOLVO_AGENT_ENABLED=false → `disabled` and no
  * side effects) and never executes: no KeeperHub, no simulation, no approval,
@@ -49,6 +51,7 @@ export type AgentServiceResult =
   | { outcome: "duplicate"; payoutId: string | null; claimId: string | null }
   | { outcome: "needs_clarification"; missingFields: MissingFieldKey[]; question: string }
   | { outcome: "prepared_payment"; prepared: Awaited<ReturnType<typeof bridgePreparedPayment>> }
+  | { outcome: "prepared_batch_payment"; prepared: Awaited<ReturnType<typeof bridgePreparedBatchPayment>> }
   | { outcome: "claim_link_created"; claim: Awaited<ReturnType<typeof bridgePreparedClaimLink>> }
   | { outcome: "status_visible"; status: Extract<ReturnType<typeof agentStatusResult>, { outcome: "visible" }> }
   | { outcome: "status_not_found"; payoutId: string }
@@ -233,12 +236,23 @@ export async function runAgentOrchestration(input: AgentServiceInput, deps: Agen
         return { outcome: "unsupported", reason: decision.reason };
       }
       case "prepared_batch_payment": {
-        // M10.4: the planner decision exists and is recorded on the run, but
-        // there is deliberately NO bridge yet — the M10.5 application bridge
-        // owns payout creation. Until then the service surfaces the safe
-        // unsupported/no-artifact outcome (no payout, no payout_item).
-        await terminalRun(deps, run.id, "unknown", "prepared_batch_payment", "Batch payments are not wired yet.");
-        return { outcome: "unsupported", reason: "Batch payments are not wired yet." };
+        // M10.5: the application-owned bridge persists the prepared batch as
+        // ONE pending_approval payout + N items. Still no execution, no
+        // approval — the M5 approval pipeline remains the only executor.
+        try {
+          const prepared = await bridgePreparedBatchPayment(
+            { decision, run, workspace: workspace as WorkspaceRow, member: member as WorkspaceMemberRow, userId: agentInput.userId },
+            { repo: deps.repo },
+          );
+          return { outcome: "prepared_batch_payment", prepared };
+        } catch (error) {
+          if (error instanceof PrepareBatchPaymentBridgeError) {
+            await terminalRun(deps, run.id, "blocked", "blocked", error.message);
+            return { outcome: "blocked", reason: error.message };
+          }
+          await failRun(deps, run.id, "bridge_error", error);
+          return { outcome: "failed", reason: "The batch payment could not be prepared." };
+        }
       }
     }
   } catch (error) {

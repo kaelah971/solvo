@@ -91,6 +91,27 @@ function claimResult(): AgentServiceResult {
   };
 }
 
+function batchResult(overrides: Partial<Extract<AgentServiceResult, { outcome: "prepared_batch_payment" }>["prepared"]> = {}): AgentServiceResult {
+  return {
+    outcome: "prepared_batch_payment",
+    prepared: {
+      outcome: "created",
+      payoutId: PAYOUT_ID,
+      itemCount: 2,
+      totalAmountBaseUnits: "20000",
+      recipients: [
+        { label: "blossom", address: "0x1234567890abcdef1234567890abcdef12345678", amountBaseUnits: "10000", memo: null },
+        { label: "endurance", address: "0x234567890abcdef1234567890abcdef123456789", amountBaseUnits: "10000", memo: null },
+      ],
+      memo: null,
+      state: "pending_approval",
+      approvalRequired: true,
+      buttons: [],
+      ...overrides,
+    },
+  };
+}
+
 async function makeWorkspaceFixture() {
   const repo = new MemoryRepository();
   const workspace = await repo.createWorkspace({
@@ -200,11 +221,15 @@ describe("agent truthfulness — reply contract", () => {
     assertNoTruthClaims(reply.text, "failed");
   });
 
-  it("24. batch unsupported replies never claim execution, proof, or hashes", () => {
-    const reply = formatAgentServiceResult({ outcome: "unsupported", reason: "Batch payments are not wired yet." });
-    assert.match(reply.text, /couldn't safely/i);
-    assertNoTruthClaims(reply.text, "batch unsupported");
-    assert.equal(reply.text.includes("prepared"), false, "must not claim a prepared batch was persisted");
+  it("24. prepared batch reply claims no execution, proof, hashes, or completion", () => {
+    const reply = formatAgentServiceResult(batchResult());
+    assert.match(reply.text, /approval required/i);
+    assert.match(reply.text, /no funds have moved/i);
+    assert.match(reply.text, /RECIPIENTS/i);
+    assert.match(reply.text, /blossom/i);
+    assert.match(reply.text, /endurance/i);
+    assert.match(reply.text, /0\.02 USDC/i);
+    assertNoTruthClaims(reply.text, "prepared batch");
   });
 
   it("8. hostile provider output claiming completion with a fake hash still fails closed", async () => {
@@ -429,6 +454,28 @@ describe("agent truthfulness — status source of truth", () => {
     assert.equal(reply.text.includes(FAKE_HASH), false, "agent status must never surface the pipeline hash");
     assert.equal(reply.text.includes(FAKE_EXECUTION_ID), false);
     assertNoTruthClaims(reply.text, "routing completed status");
+  });
+  it("30. a prepared batch's status reads pending_approval from the payout row, not the run", async () => {
+    const { repo } = await makeWorkspaceFixture();
+    const batchReply = await handleAgentGroupText(
+      { user: user(), text: "pay daniel and 0x1234567890abcdef1234567890abcdef12345678 0.01 USDC each" },
+      routingDeps(repo),
+    );
+    assert.ok(batchReply);
+    assert.match(batchReply.text, /approval required/i);
+    const batchRun = await repo.getAgentRunByIdempotencyKey("tg:-100777:m42:agent");
+    assert.ok(batchRun?.payout_id);
+    const payout = await repo.getPayoutById(batchRun.payout_id);
+    assert.equal(payout?.status, "pending_approval");
+    const statusReply = await handleAgentGroupText(
+      { user: user({ messageId: 43 }), text: `check status ${batchRun.payout_id}` },
+      routingDeps(repo),
+    );
+    assert.ok(statusReply);
+    assert.match(statusReply.text, /pending_approval/i);
+    assert.match(statusReply.text, /waiting for approval/i);
+    assertNoTruthClaims(statusReply.text, "batch status");
+    assert.equal(repo.executionAttempts.size, 0);
   });
 });
 

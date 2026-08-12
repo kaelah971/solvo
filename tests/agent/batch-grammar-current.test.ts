@@ -14,8 +14,8 @@ const ADDRESS_1 = "0x742d35cc6634c0532925a3b844bc454e4438f44e";
 const ADDRESS_2 = "0x1234567890abcdef1234567890abcdef12345678";
 const ADDRESS_3 = "0x234567890abcdef1234567890abcdef123456789";
 
-const SAFE_EXPECTATIONS = new Set(["clarification", "unsupported", "blocked", "batch_parsed", "planner_prepared_batch"]);
-const PARSED_EXPECTATIONS = new Set(["batch_parsed", "planner_prepared_batch"]);
+const SAFE_EXPECTATIONS = new Set(["clarification", "unsupported", "blocked", "batch_parsed", "prepared_batch"]);
+const PARSED_EXPECTATIONS = new Set(["batch_parsed", "prepared_batch"]);
 
 function aliasesFor(phrase: AgentPhrase): readonly string[] {
   return phrase.aliases ?? ["daniel", "blossom", "endurance"];
@@ -111,7 +111,7 @@ describe("M10.4 batch planner — corpus layer", () => {
       const interpretation = interpretStatically(agentInput(text, aliasesFor(phrase)), extraction);
       const planner = new AgentPlanner({ repo, workspace, member, userId: "123456" });
       const decision = await planner.plan(extraction, interpretation);
-      if (phrase.expectation === "planner_prepared_batch") {
+      if (phrase.expectation === "prepared_batch") {
         assert.equal(decision.decision, "prepared_batch_payment", `${phrase.id} → ${decision.decision}`);
         if (decision.decision === "prepared_batch_payment") {
           assert.equal(decision.planAction, "prepare_batch_payment", phrase.id);

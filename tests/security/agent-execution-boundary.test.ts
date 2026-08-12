@@ -38,6 +38,7 @@ const AGENT_SOURCE_FILES = [
   "src/server/agent/redact.ts",
   "src/server/agent/messages.ts",
   "src/server/agent/bridges/prepare-payment.ts",
+  "src/server/agent/bridges/prepare-batch-payment.ts",
   "src/server/agent/bridges/create-claim-link.ts",
   "src/server/agent/bridges/status-result.ts",
   "src/server/telegram/flows/agent-flow.ts",
@@ -201,22 +202,31 @@ describe("agent execution authority boundary", () => {
     assert.equal(repo.auditEvents.some((e) => e.event_type === "approval_granted"), false);
   });
 
-  it("19. parsed NL batch phrases create no payout or claim until the M10.5 bridge", async () => {
+  it("19. parsed NL batch phrases persist as pending_approval with zero execution", async () => {
     const { repo, workspace } = await makeFixture();
     const result = await run("pay daniel and 0x1234567890abcdef1234567890abcdef12345678 0.01 USDC each", depsFor(repo));
-    // M10.4: the planner decision exists and is recorded, but the service
-    // still surfaces unsupported with ZERO artifacts until the bridge lands.
-    assert.equal(result.outcome, "unsupported");
-    assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:prepare"), null);
-    assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0);
+    assert.equal(result.outcome, "prepared_batch_payment");
     assert.equal(repo.executionAttempts.size, 0);
+    if (result.outcome === "prepared_batch_payment") {
+      const payout = await repo.getPayoutById(result.prepared.payoutId);
+      assert.equal(payout?.status, "pending_approval");
+      assert.equal(payout?.approved_at, null);
+      assert.equal(payout?.completed_at, null);
+      const items = await repo.getPayoutItemsByPayoutId(result.prepared.payoutId);
+      assert.equal(items.length, 2);
+      assert.ok(items.every((item) => item.status === "pending_approval"));
+    }
+    assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0);
     const record = await repo.getAgentRunByIdempotencyKey("tg:-100777:m1:agent");
     assert.ok(record);
     assert.equal(record.decision_type, "prepared_batch_payment");
-    assert.equal(record.payout_id, null, "the batch run links no payout");
+    assert.equal(record.payout_id, result.outcome === "prepared_batch_payment" ? result.prepared.payoutId : null, "the batch run links the payout");
     assert.equal(record.claim_id, null, "the batch run links no claim");
     const types = repo.auditEvents.map((event) => event.event_type);
-    assert.equal(types.includes("request_created"), false);
-    assert.equal(types.includes("approval_required"), false);
+    assert.equal(types.includes("request_created"), true);
+    assert.equal(types.includes("approval_required"), true);
+    assert.equal(types.includes("approval_granted"), false);
+    assert.equal(types.some((type) => type.startsWith("simulation_")), false);
+    assert.equal(types.some((type) => type.startsWith("execution_")), false);
   });
 });

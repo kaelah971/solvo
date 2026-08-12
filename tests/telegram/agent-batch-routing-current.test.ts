@@ -61,20 +61,38 @@ async function assertNoExecution(repo: MemoryRepository): Promise<void> {
   }
 }
 
-describe("M10.2 batch grammar baseline — Telegram routing", () => {
-  it("every batch phrase through the route creates zero artifacts", async () => {
+describe("M10.5 batch grammar — Telegram routing", () => {
+  it("valid batch phrases persist one pending_approval payout + N items; everything else stays artifact-free", async () => {
     let checked = 0;
+    let prepared = 0;
     for (const phrase of AGENT_BATCH_PHRASES) {
       const { repo, workspace } = await makeFixture();
       const reply = await handleAgentGroupText({ user: user(), text: phrase.phrase }, depsFor(repo));
       assert.ok(reply, `${phrase.id}: expected a reply`);
-      assert.match(reply.text, /couldn't safely|blocked|one more detail/i, phrase.id);
-      assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:prepare"), null, `${phrase.id}: no payout item`);
+      if (phrase.expectation === "prepared_batch") {
+        assert.match(reply.text, /approval required/i, phrase.id);
+        assert.match(reply.text, /no funds have moved/i, phrase.id);
+        const run = await repo.getAgentRunByIdempotencyKey("tg:-100777:m1:agent");
+        assert.ok(run?.payout_id, `${phrase.id}: run must link a payout`);
+        const payout = await repo.getPayoutById(run.payout_id);
+        assert.equal(payout?.status, "pending_approval", phrase.id);
+        assert.equal(payout?.approved_at, null, phrase.id);
+        assert.equal(payout?.completed_at, null, phrase.id);
+        const items = await repo.getPayoutItemsByPayoutId(run.payout_id);
+        assert.equal(items.length >= 2, true, `${phrase.id}: at least two items`);
+        assert.equal(items.every((item) => item.status === "pending_approval"), true, phrase.id);
+        prepared += 1;
+      } else {
+        assert.match(reply.text, /couldn't safely|blocked|one more detail/i, phrase.id);
+        assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:batch:0"), null, `${phrase.id}: no batch item`);
+        assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:prepare"), null, `${phrase.id}: no single payment item`);
+      }
       assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0, `${phrase.id}: no claim`);
       await assertNoExecution(repo);
       checked += 1;
     }
     assert.ok(checked >= 50, `expected at least 50 routing checks, got ${checked}`);
+    assert.ok(prepared >= 18, `expected at least 18 persisted batch phrases, got ${prepared}`);
   });
 
   it("disabled mode stays inert for batch phrases", async () => {

@@ -138,11 +138,20 @@ describe("M9 real-world corpus — Telegram routing layer", () => {
           assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0, phrase.id);
           break;
         }
-        case "planner_prepared_batch": {
-          // M10.4: the planner decision exists but the service still surfaces
-          // unsupported with zero artifacts until the M10.5 bridge.
-          assert.match(reply.text, /couldn't safely|blocked|one more detail/i, phrase.id);
-          assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:prepare"), null, phrase.id);
+        case "prepared_batch": {
+          // M10.5: the bridge persists one pending_approval payout + N items;
+          // no execution, no approval.
+          assert.match(reply.text, /approval required/i, phrase.id);
+          assert.match(reply.text, /no funds have moved/i, phrase.id);
+          const run = await repo.getAgentRunByIdempotencyKey("tg:-100777:m1:agent");
+          assert.ok(run?.payout_id, phrase.id);
+          const payout = await repo.getPayoutById(run.payout_id);
+          assert.equal(payout?.status, "pending_approval", phrase.id);
+          assert.equal(payout?.approved_at, null, phrase.id);
+          assert.equal(payout?.completed_at, null, phrase.id);
+          const items = await repo.getPayoutItemsByPayoutId(run.payout_id);
+          assert.equal(items.length >= 2, true, phrase.id);
+          assert.equal(items.every((item) => item.status === "pending_approval"), true, phrase.id);
           assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0, phrase.id);
           break;
         }

@@ -39,6 +39,8 @@ export function formatAgentServiceResult(result: AgentServiceResult): AgentForma
       return { text: clarificationMessage(result.missingFields) };
     case "prepared_payment":
       return preparedPaymentMessage(result);
+    case "prepared_batch_payment":
+      return preparedBatchMessage(result);
     case "claim_link_created":
       return claimLinkMessage(result);
     case "status_visible":
@@ -127,6 +129,30 @@ function preparedPaymentMessage(result: Extract<AgentServiceResult, { outcome: "
   ];
   if (prepared.memo !== null && prepared.memo.length > 0) {
     lines.push(`MEMO         ${prepared.memo}`);
+  }
+  lines.push(
+    "",
+    "No funds have moved.",
+    "An owner or approver must approve before anything executes.",
+    "KeeperHub execution happens only after approval.",
+  );
+  return { text: lines.join("\n"), buttons: prepared.buttons };
+}
+
+function preparedBatchMessage(result: Extract<AgentServiceResult, { outcome: "prepared_batch_payment" }>): AgentFormattedReply {
+  const prepared = result.prepared;
+  const lines = [
+    "BATCH PAYMENT REQUEST PREPARED",
+    "",
+    `RECIPIENTS    ${prepared.itemCount}`,
+    `TOTAL         ${baseUnitsToUsdc(prepared.totalAmountBaseUnits)} USDC`,
+    "STATUS        APPROVAL REQUIRED",
+  ];
+  for (const recipient of prepared.recipients) {
+    lines.push(`  ${recipient.label}    ${baseUnitsToUsdc(recipient.amountBaseUnits)} USDC`);
+  }
+  if (prepared.memo !== null && prepared.memo.length > 0) {
+    lines.push(`MEMO          ${prepared.memo}`);
   }
   lines.push(
     "",

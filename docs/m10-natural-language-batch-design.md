@@ -363,6 +363,38 @@ updated **in the same commit** that implements the behavior.
 | Message-length abuse (huge recipient lists) | NL cap 10 recipients + existing input-length cap |
 | Claim-batch scope creep | Explicitly deferred to M11/M10.x with no mixed decision shape |
 
+## M10.5 bridge (implemented)
+
+- **Valid parsed/planned batches now persist as `pending_approval` batch
+  payouts.** `bridgePreparedBatchPayment` (`src/server/agent/bridges/
+  prepare-batch-payment.ts`) converts a planner `prepared_batch_payment`
+  decision into the canonical M5 batch shape: ONE `payouts` row with
+  `source_type = 'telegram_batch'` (existing enum, no migration) + N
+  `payout_items` rows, all `pending_approval`, using the existing
+  `createPayout`/`createPayoutItem`/`appendAuditEvent` transaction surface.
+- **Still no execution.** The bridge cannot approve, self-approve, simulate,
+  execute, or call KeeperHub. The existing M5 human approval/execution
+  pipeline remains the ONLY path from `pending_approval` onward; the bridge
+  re-runs `evaluateBatchRequest` (per-item per-tx limit + total daily limit)
+  as a defense-in-depth recheck, and the transactional approval-time re-check
+  stays authoritative.
+- **Idempotency/concurrency:** item keys `ag:<run.idempotency_key>:batch:<n>`
+  (run key = `tg:<chat>:m<messageId>:agent`). The bridge takes the advisory
+  lock on the first item key inside the transaction; concurrent or duplicate
+  deliveries resolve to ONE payout with no duplicate items or audit events
+  (the existing M5 `/batch` command semantics).
+- **Source/audit behavior:** per-item `request_created` audits + ONE
+  `approval_required` per batch; audit metadata carries
+  `source: "telegram_natural_language_batch"` so NL batches stay
+  distinguishable. Item memo = recipient label (alias or short address);
+  the batch reason is stored on the agent-run decision record.
+- **No Judge Mode batch, no claim-link batch.** The bridge blocks judge
+  workspaces and non-community modes; claim links remain the
+  no-wallet-recipient path and are never mixed into a batch (v1).
+- Agent run is marked `prepared` with `decision_type = prepared_batch_payment`
+  and the payout id linked; `agent_runs` remain observability only — the
+  payout row is payment truth.
+
 ## M10.4 planner (implemented)
 
 - **Parsed batch intents now produce a planner-level `prepared_batch_payment`
