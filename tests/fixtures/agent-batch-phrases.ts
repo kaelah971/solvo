@@ -1,16 +1,17 @@
 /**
- * M10.2/M10.3 — Natural-language batch grammar corpus.
+ * M10.2/M10.3/M10.4 — Natural-language batch grammar corpus.
  *
  * Since M10.3, the deterministic parser (extraction.parseBatchPayment)
  * RECOGNIZES the v1 grammar (G1 "each", G2 "split/divide", G3 per-recipient
- * amounts) as `batch_parsed` intents. The planner and service still produce
- * ZERO artifacts until M10.4/M10.5: no payout, no claim, and NEVER a silent
- * single-recipient payment derived from a multi-recipient message.
+ * amounts) as parsed intents. Since M10.4, valid G1/G2/G3 intents produce a
+ * planner-level `prepared_batch_payment` decision (`planner_prepared_batch`).
+ * The service and Telegram routing STILL produce ZERO artifacts until the
+ * M10.5 bridge: no payout, no claim, and NEVER a silent single-recipient
+ * payment derived from a multi-recipient message.
  *
  * Entries not carrying a recognized batch marker keep their safe baseline
- * outcomes (clarification/unsupported). When the planner lands, only the
- * `batch_parsed` entries change expectation — in the same commit as the
- * implementation.
+ * outcomes (clarification/unsupported). Only the parsed entries change
+ * expectation — in the same commit as the implementation.
  *
  * Registry aliases in fixtures: daniel, blossom, endurance (mike is NOT
  * registered). Workspace per-transaction limit is 1 USDC.
@@ -25,32 +26,32 @@ const ADDRESS_2 = "0x1234567890abcdef1234567890abcdef12345678";
 
 export const AGENT_BATCH_PHRASES: readonly AgentPhrase[] = [
   // ── 1. G1 — uniform per-recipient amount ("each") ────────────────────────
-  // M10.3: the deterministic parser recognizes these (batch_parsed); the
-  // planner still produces no artifact until M10.4/M10.5.
-  { id: "batch-g1-001", phrase: "pay blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 parses: 2 recipients × 0.01 USDC; no payout until M10.4." },
-  { id: "batch-g1-002", phrase: "send 0.01 USDC each to blossom and endurance", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 post-amount form parses." },
-  { id: "batch-g1-003", phrase: "pay blossom, endurance, and daniel 0.01 USDC each", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 with three named recipients parses." },
-  { id: "batch-g1-004", phrase: `send 0.02 USDC each to ${ADDRESS_1} and ${ADDRESS_2}`, category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 with two explicit addresses parses — never a single-address payment." },
-  { id: "batch-g1-005", phrase: "pay blossom and endurance 0.01 usdc each", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 lowercase parses." },
-  { id: "batch-g1-006", phrase: "pls pay blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 with politeness noise parses." },
-  { id: "batch-g1-007", phrase: "pay blossom and endurance 0.01 USDC each for the sprint", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 with a reason phrase parses (memo 'the sprint')." },
-  { id: "batch-g1-008", phrase: "tip blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G1 with a tip verb parses." },
+  // M10.4: the planner produces prepared_batch_payment for these; the
+  // service still creates no artifact until the M10.5 bridge.
+  { id: "batch-g1-001", phrase: "pay blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 parses: 2 recipients × 0.01 USDC; planner prepares the batch decision; no payout until M10.5." },
+  { id: "batch-g1-002", phrase: "send 0.01 USDC each to blossom and endurance", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 post-amount form parses." },
+  { id: "batch-g1-003", phrase: "pay blossom, endurance, and daniel 0.01 USDC each", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 with three named recipients parses." },
+  { id: "batch-g1-004", phrase: `send 0.02 USDC each to ${ADDRESS_1} and ${ADDRESS_2}`, category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 with two explicit addresses parses — never a single-address payment." },
+  { id: "batch-g1-005", phrase: "pay blossom and endurance 0.01 usdc each", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 lowercase parses." },
+  { id: "batch-g1-006", phrase: "pls pay blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 with politeness noise parses." },
+  { id: "batch-g1-007", phrase: "pay blossom and endurance 0.01 USDC each for the sprint", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 with a reason phrase parses (memo 'the sprint')." },
+  { id: "batch-g1-008", phrase: "tip blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G1 with a tip verb parses." },
 
   // ── 2. G2 — equal split of a total ───────────────────────────────────────
-  { id: "batch-g2-001", phrase: "split 0.05 USDC between blossom and endurance", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G2 divisible split parses (0.025 each)." },
+  { id: "batch-g2-001", phrase: "split 0.05 USDC between blossom and endurance", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G2 divisible split parses (0.025 each)." },
   { id: "batch-g2-002", phrase: "split 0.06 USDC equally between blossom, endurance, and mike", category: "batch_future", expectation: "clarification", artifact: "no_artifact", supported: "now", safety: "G2 with an unregistered name clarifies (all-or-resolve)." },
-  { id: "batch-g2-003", phrase: "divide 0.03 USDC between blossom and endurance", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "'divide' split parses." },
-  { id: "batch-g2-004", phrase: "split 0.02 USDC among blossom and endurance", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G2 with 'among' parses." },
+  { id: "batch-g2-003", phrase: "divide 0.03 USDC between blossom and endurance", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "'divide' split parses." },
+  { id: "batch-g2-004", phrase: "split 0.02 USDC among blossom and endurance", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G2 with 'among' parses." },
   { id: "batch-g2-005", phrase: "split 0.05 USDC among blossom, endurance, and daniel", category: "batch_future", expectation: "clarification", artifact: "no_artifact", supported: "now", safety: "G2 non-divisible total clarifies — never rounded." },
-  { id: "batch-g2-006", phrase: "split 0.05 usdc between blossom and endurance", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G2 lowercase parses." },
+  { id: "batch-g2-006", phrase: "split 0.05 usdc between blossom and endurance", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G2 lowercase parses." },
 
   // ── 3. G3 — explicit per-recipient amounts ───────────────────────────────
-  { id: "batch-g3-001", phrase: "pay blossom 0.01 USDC and endurance 0.02 USDC", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G3 pairs parse — never a payment to only the first recipient." },
-  { id: "batch-g3-002", phrase: "send 0.01 USDC to blossom and 0.02 USDC to endurance", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G3 with per-recipient 'to' parses." },
-  { id: "batch-g3-003", phrase: "reimburse blossom 0.01 USDC and endurance 0.02 USDC for gas", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G3 with reimburse + reason parses (memo 'gas')." },
-  { id: "batch-g3-004", phrase: "pay blossom 0.01 USDC, endurance 0.02 USDC", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G3 comma-separated pairs parse." },
-  { id: "batch-g3-005", phrase: "send blossom 0.01 USDC and endurance 0.02 USDC", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G3 verb-first form parses." },
-  { id: "batch-g3-006", phrase: "pay blossom 0.01 USDC and endurance 0.02 USDC for the design", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "G3 with a reason phrase parses." },
+  { id: "batch-g3-001", phrase: "pay blossom 0.01 USDC and endurance 0.02 USDC", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G3 pairs parse — never a payment to only the first recipient." },
+  { id: "batch-g3-002", phrase: "send 0.01 USDC to blossom and 0.02 USDC to endurance", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G3 with per-recipient 'to' parses." },
+  { id: "batch-g3-003", phrase: "reimburse blossom 0.01 USDC and endurance 0.02 USDC for gas", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G3 with reimburse + reason parses (memo 'gas')." },
+  { id: "batch-g3-004", phrase: "pay blossom 0.01 USDC, endurance 0.02 USDC", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G3 comma-separated pairs parse." },
+  { id: "batch-g3-005", phrase: "send blossom 0.01 USDC and endurance 0.02 USDC", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G3 verb-first form parses." },
+  { id: "batch-g3-006", phrase: "pay blossom 0.01 USDC and endurance 0.02 USDC for the design", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "G3 with a reason phrase parses." },
 
   // ── 4. Hazard forms (must never become a single-recipient payment) ──────
   { id: "batch-haz-001", phrase: "pay blossom and mike 0.01 USDC", category: "batch_future", expectation: "clarification", artifact: "no_artifact", supported: "future", safety: "M9 hazard: multi-recipient without batch marker; never single payment." },

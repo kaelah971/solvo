@@ -14,7 +14,8 @@ const ADDRESS_1 = "0x742d35cc6634c0532925a3b844bc454e4438f44e";
 const ADDRESS_2 = "0x1234567890abcdef1234567890abcdef12345678";
 const ADDRESS_3 = "0x234567890abcdef1234567890abcdef123456789";
 
-const SAFE_EXPECTATIONS = new Set(["clarification", "unsupported", "blocked", "batch_parsed"]);
+const SAFE_EXPECTATIONS = new Set(["clarification", "unsupported", "blocked", "batch_parsed", "planner_prepared_batch"]);
+const PARSED_EXPECTATIONS = new Set(["batch_parsed", "planner_prepared_batch"]);
 
 function aliasesFor(phrase: AgentPhrase): readonly string[] {
   return phrase.aliases ?? ["daniel", "blossom", "endurance"];
@@ -85,7 +86,7 @@ describe("M10.3 batch parser — interpreter layer", () => {
         `${phrase.id}: must never carry a complete single-recipient payment`,
       );
       assert.equal(result.intentKind === "create_claim_link", false, `${phrase.id}: batch phrases never create claim intents`);
-      if (phrase.expectation === "batch_parsed") {
+      if (PARSED_EXPECTATIONS.has(phrase.expectation)) {
         assert.equal(result.intentKind, "prepare_batch_payment", `${phrase.id} → ${result.intentKind}`);
         assert.ok(result.intent.batch, `${phrase.id}: batch candidate required`);
         assert.equal(result.intent.batch.recipients.length >= 2, true, `${phrase.id}: at least two recipients`);
@@ -99,30 +100,40 @@ describe("M10.3 batch parser — interpreter layer", () => {
   });
 });
 
-describe("M10.3 batch parser — planner layer", () => {
-  it("plans every batch phrase safely with zero artifacts and no execution", async () => {
+describe("M10.4 batch planner — corpus layer", () => {
+  it("plans every batch phrase safely: prepared_batch_payment for valid grammar, safe declines otherwise, zero artifacts", async () => {
     const { repo, workspace, member } = await makePlannerContext();
     let checked = 0;
+    let prepared = 0;
     for (const phrase of AGENT_BATCH_PHRASES) {
       const text = phrase.phrase;
       const extraction = extractCandidates(text, aliasesFor(phrase));
       const interpretation = interpretStatically(agentInput(text, aliasesFor(phrase)), extraction);
       const planner = new AgentPlanner({ repo, workspace, member, userId: "123456" });
       const decision = await planner.plan(extraction, interpretation);
-      assert.ok(
-        decision.decision === "ask_clarifying_question" || decision.decision === "unsupported" || decision.decision === "blocked",
-        `${phrase.id} → ${decision.decision}, expected clarification/unsupported/blocked`,
-      );
+      if (phrase.expectation === "planner_prepared_batch") {
+        assert.equal(decision.decision, "prepared_batch_payment", `${phrase.id} → ${decision.decision}`);
+        if (decision.decision === "prepared_batch_payment") {
+          assert.equal(decision.planAction, "prepare_batch_payment", phrase.id);
+        }
+        prepared += 1;
+      } else {
+        assert.ok(
+          decision.decision === "ask_clarifying_question" || decision.decision === "unsupported" || decision.decision === "blocked",
+          `${phrase.id} → ${decision.decision}, expected clarification/unsupported/blocked`,
+        );
+      }
       assert.notEqual(decision.decision, "prepared_payment", `${phrase.id}: no single-recipient fallback`);
       assert.notEqual(decision.decision, "prepared_claim_link", `${phrase.id}: no claim fallback`);
       assert.equal(repo.executionAttempts.size, 0, `${phrase.id}: no execution attempts`);
       checked += 1;
     }
     assert.ok(checked >= 50, `expected at least 50 planner checks, got ${checked}`);
+    assert.ok(prepared >= 18, `expected at least 18 prepared batch decisions, got ${prepared}`);
     assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0, "planner creates nothing");
   });
 
-  it("parsed batch intents get the not-wired-yet unsupported decision", async () => {
+  it("valid G1 batch intents produce the prepared_batch_payment decision shape", async () => {
     const { repo, workspace, member } = await makePlannerContext();
     const phrase = AGENT_BATCH_PHRASES.find((entry) => entry.id === "batch-g1-001");
     assert.ok(phrase);
@@ -130,9 +141,20 @@ describe("M10.3 batch parser — planner layer", () => {
     const interpretation = interpretStatically(agentInput(phrase.phrase, aliasesFor(phrase)), extraction);
     const planner = new AgentPlanner({ repo, workspace, member, userId: "123456" });
     const decision = await planner.plan(extraction, interpretation);
-    assert.equal(decision.decision, "unsupported");
-    if (decision.decision === "unsupported") {
-      assert.match(decision.reason, /not wired/i);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.equal(decision.planAction, "prepare_batch_payment");
+      assert.equal(decision.batch.recipients.length, 2);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountBaseUnits), ["10000", "10000"]);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountDisplay), ["0.01", "0.01"]);
+      assert.equal(decision.batch.totalAmountBaseUnits, "20000");
+      assert.equal(decision.batch.totalAmountDisplay, "0.02");
+      assert.equal(decision.batch.currency, "USDC");
+      assert.equal(decision.batch.chainId, "8453");
+      assert.equal(decision.batch.approvalRequired, true);
+      assert.ok(decision.batch.policyReason.length > 0);
+      assert.equal(decision.batch.mode, "uniform_each");
+      assert.equal(decision.batch.source, "natural_language");
     }
     assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:prepare"), null);
   });

@@ -232,6 +232,14 @@ export async function runAgentOrchestration(input: AgentServiceInput, deps: Agen
         await terminalRun(deps, run.id, "unknown", "unsupported", decision.reason);
         return { outcome: "unsupported", reason: decision.reason };
       }
+      case "prepared_batch_payment": {
+        // M10.4: the planner decision exists and is recorded on the run, but
+        // there is deliberately NO bridge yet — the M10.5 application bridge
+        // owns payout creation. Until then the service surfaces the safe
+        // unsupported/no-artifact outcome (no payout, no payout_item).
+        await terminalRun(deps, run.id, "unknown", "prepared_batch_payment", "Batch payments are not wired yet.");
+        return { outcome: "unsupported", reason: "Batch payments are not wired yet." };
+      }
     }
   } catch (error) {
     await failRun(deps, run.id, "orchestration_error", error);

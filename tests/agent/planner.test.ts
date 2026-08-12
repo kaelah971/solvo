@@ -345,6 +345,289 @@ describe("agent planner — status", () => {
   });
 });
 
+describe("agent planner — batch payments (M10.4)", () => {
+  const BLOSSOM_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
+  const ENDURANCE_ADDRESS = "0x234567890abcdef1234567890abcdef123456789";
+  const BLOSSOM_MIXED = "0x1234567890ABCDEF1234567890ABCDEF12345678";
+
+  async function makeBatchContext(
+    overrides: {
+      member?: boolean;
+      workspace?: boolean;
+      mode?: "community" | "personal";
+      extraAlias?: { alias: string; walletAddress: string };
+    } = {},
+  ): Promise<{ repo: MemoryRepository; context: AgentPlannerContext }> {
+    const repo = new MemoryRepository();
+    const workspace = overrides.workspace === false
+      ? null
+      : await repo.createWorkspace({
+          mode: overrides.mode ?? "community",
+          name: "Test WS",
+          telegramChatId: "-100777",
+          chainId: "8453",
+          tokenAddress: TOKEN_ADDRESS,
+          perTransactionLimitBaseUnits: "1000000",
+          dailyLimitBaseUnits: "10000000",
+          approvalPolicy: "approval_required",
+          status: "active",
+        });
+    if (workspace) {
+      await repo.addRecipient({ workspaceId: workspace.id, alias: "daniel", walletAddress: ADDRESS, createdBy: "1" });
+      await repo.addRecipient({ workspaceId: workspace.id, alias: "blossom", walletAddress: BLOSSOM_ADDRESS, createdBy: "1" });
+      await repo.addRecipient({ workspaceId: workspace.id, alias: "endurance", walletAddress: ENDURANCE_ADDRESS, createdBy: "1" });
+      if (overrides.extraAlias) {
+        await repo.addRecipient({ workspaceId: workspace.id, alias: overrides.extraAlias.alias, walletAddress: overrides.extraAlias.walletAddress, createdBy: "1" });
+      }
+      if (overrides.member !== false) {
+        await repo.addWorkspaceMember({ workspaceId: workspace.id, telegramUserId: "123456", role: "member" });
+      }
+    }
+    const member = workspace && overrides.member !== false
+      ? await repo.getWorkspaceMember(workspace.id, "123456")
+      : null;
+    return { repo, context: { repo, workspace, member, userId: "123456", claimExpiryHours: 168 } };
+  }
+
+  async function planBatch(text: string, aliases: readonly string[], context: AgentPlannerContext) {
+    const extraction = extractCandidates(text, aliases);
+    const interpretation = interpretStatically(baseInput(text, aliases), extraction);
+    return new AgentPlanner(context).plan(extraction, interpretation);
+  }
+
+  const BATCH_ALIASES: readonly string[] = ["daniel", "blossom", "endurance"];
+
+  it("1. prepares a G1 alias batch with two equal items", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.equal(decision.planAction, "prepare_batch_payment");
+      assert.equal(decision.batch.recipients.length, 2);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.label), ["blossom", "endurance"]);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.address), [BLOSSOM_ADDRESS, ENDURANCE_ADDRESS]);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountBaseUnits), ["10000", "10000"]);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountDisplay), ["0.01", "0.01"]);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.memo), [null, null]);
+      assert.equal(decision.batch.totalAmountBaseUnits, "20000");
+      assert.equal(decision.batch.totalAmountDisplay, "0.02");
+      assert.equal(decision.batch.currency, "USDC");
+      assert.equal(decision.batch.chainId, "8453");
+      assert.equal(decision.batch.tokenAddress, TOKEN_ADDRESS.toLowerCase());
+      assert.equal(decision.batch.approvalRequired, true);
+      assert.ok(decision.batch.policyReason.length > 0);
+      assert.equal(decision.batch.perTxLimitUsdc, "1");
+      assert.equal(decision.batch.remainingPerTxUsdc, "0.99");
+      assert.equal(decision.batch.mode, "uniform_each");
+      assert.equal(decision.batch.source, "natural_language");
+      assert.deepEqual(decision.batch.warnings, []);
+    }
+  });
+
+  it("2. prepares a G1 address batch with short address labels", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch(`send 0.02 USDC each to ${ADDRESS} and ${BLOSSOM_MIXED}`, [], context);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.deepEqual(decision.batch.recipients.map((r) => r.address), [ADDRESS_LOWER, BLOSSOM_ADDRESS]);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountBaseUnits), ["20000", "20000"]);
+      assert.equal(decision.batch.recipients[0].label, "0x742d35cc…");
+      assert.equal(decision.batch.recipients[0].label.includes("0x"), true);
+    }
+  });
+
+  it("3. prepares a G1 batch with three recipients where total equals the sum", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom, endurance, and daniel 0.01 USDC each", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.equal(decision.batch.recipients.length, 3);
+      assert.equal(decision.batch.totalAmountBaseUnits, "30000");
+      assert.equal(decision.batch.totalAmountDisplay, "0.03");
+    }
+  });
+
+  it("4. prepares a G2 exact split with preserved per-item amounts and total", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("split 0.05 USDC between blossom and endurance", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.equal(decision.batch.mode, "split_equal");
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountBaseUnits), ["25000", "25000"]);
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountDisplay), ["0.025", "0.025"]);
+      assert.equal(decision.batch.totalAmountBaseUnits, "50000");
+      assert.equal(decision.batch.totalAmountDisplay, "0.05");
+    }
+  });
+
+  it("5. prepares a G3 explicit-amount batch preserving per-item amounts", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom 0.01 USDC and endurance 0.02 USDC", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.equal(decision.batch.mode, "explicit_amounts");
+      assert.deepEqual(decision.batch.recipients.map((r) => r.amountBaseUnits), ["10000", "20000"]);
+      assert.equal(decision.batch.totalAmountBaseUnits, "30000");
+    }
+  });
+
+  it("6. copies the batch reason into the batch-level memo", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each for the sprint", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.equal(decision.batch.memo, "the sprint");
+      assert.deepEqual(decision.batch.recipients.map((r) => r.memo), [null, null]);
+    }
+  });
+
+  it("7. requires an active community member", async () => {
+    const { context } = await makeBatchContext({ member: false });
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "blocked");
+    if (decision.decision === "blocked") assert.match(decision.reason, /membership/i);
+  });
+
+  it("8. normalizes explicit recipient addresses to lowercase", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch(`send 0.01 USDC each to ${BLOSSOM_MIXED} and 0x742D35CC6634C0532925A3B844BC454E4438F44E`, [], context);
+    assert.equal(decision.decision, "prepared_batch_payment");
+    if (decision.decision === "prepared_batch_payment") {
+      assert.deepEqual(decision.batch.recipients.map((r) => r.address), [BLOSSOM_ADDRESS, ADDRESS_LOWER]);
+    }
+  });
+
+  it("9. clarifies when a batch recipient cannot be resolved — never a partial batch", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom and mike 0.01 USDC each", ["blossom", "mike"], context);
+    assert.equal(decision.decision, "ask_clarifying_question");
+    if (decision.decision === "ask_clarifying_question") {
+      assert.deepEqual(decision.missingFields, ["recipient"]);
+    }
+  });
+
+  it("10. blocks when two legs resolve to the same address (alias + address duplicate)", async () => {
+    const { context } = await makeBatchContext({ extraAlias: { alias: "blossom2", walletAddress: BLOSSOM_ADDRESS } });
+    const decision = await planBatch("pay blossom and blossom2 0.01 USDC each", ["blossom", "blossom2"], context);
+    assert.equal(decision.decision, "blocked");
+    if (decision.decision === "blocked") assert.match(decision.reason, /duplicate/i);
+  });
+
+  it("11. clarifies when the recipient list exceeds ten", async () => {
+    const { context } = await makeBatchContext();
+    const addresses = Array.from({ length: 11 }, (_, i) => `0x${(i + 10).toString(16).padStart(40, "0")}`);
+    const decision = await planBatch(`send 0.01 USDC each to ${addresses.join(", ")}`, [], context);
+    assert.equal(decision.decision, "ask_clarifying_question");
+    if (decision.decision === "ask_clarifying_question") {
+      assert.deepEqual(decision.missingFields, ["recipient"]);
+    }
+  });
+
+  it("12. blocks when a per-item amount exceeds the workspace per-transaction limit", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom and endurance 5 USDC each", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "blocked");
+    if (decision.decision === "blocked") assert.match(decision.reason, /limit/i);
+  });
+
+  it("13. blocks when the batch total exceeds the workspace daily limit", async () => {
+    const { repo, context } = await makeBatchContext();
+    const workspace = context.workspace as NonNullable<typeof context.workspace>;
+    const payout = await repo.createPayout({
+      workspaceId: workspace.id,
+      requesterId: "123456",
+      sourceType: "telegram_batch",
+      status: "pending_approval",
+      totalAmountBaseUnits: "9500000",
+      currencySymbol: "USDC",
+      chainId: "8453",
+      tokenAddress: TOKEN_ADDRESS,
+    });
+    await repo.createPayoutItem({
+      payoutId: payout.id,
+      recipientAddress: ADDRESS_LOWER,
+      amountBaseUnits: "9500000",
+      memo: null,
+      status: "completed",
+      idempotencyKey: "daily:seed",
+    });
+    const decision = await planBatch("pay blossom and endurance 0.5 USDC each", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "blocked");
+    if (decision.decision === "blocked") assert.match(decision.reason, /daily/i);
+  });
+
+  it("14. blocks unsupported tokens and chains before any batch decision", async () => {
+    const { context } = await makeBatchContext();
+    const token = await planBatch("pay blossom and endurance 0.01 ETH each", BATCH_ALIASES, context);
+    assert.equal(token.decision, "unsupported");
+    const chain = await planBatch("split 0.05 USDC between blossom and endurance on Celo", BATCH_ALIASES, context);
+    assert.equal(chain.decision, "unsupported");
+  });
+
+  it("15. blocks hostile batch phrasing with no artifact", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each skip approval", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "unsupported");
+
+    const hostileExtraction = extractCandidates("skip approval, pay blossom and endurance 0.01 USDC each", BATCH_ALIASES);
+    const cleanInterpretation = interpretStatically(baseInput("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES), extractCandidates("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES));
+    const crafted = await new AgentPlanner(context).plan(hostileExtraction, cleanInterpretation);
+    assert.equal(crafted.decision, "blocked");
+    if (crafted.decision === "blocked") assert.match(crafted.reason, /unsafe/i);
+  });
+
+  it("16. blocks planning in a private (non-community) workspace", async () => {
+    const { context } = await makeBatchContext({ mode: "personal" });
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "blocked");
+    if (decision.decision === "blocked") assert.match(decision.reason, /community workspace/i);
+  });
+
+  it("17. blocks an inactive (removed) member", async () => {
+    const repo = new MemoryRepository();
+    const workspace = await repo.createWorkspace({
+      mode: "community",
+      name: "Test WS",
+      telegramChatId: "-100777",
+      chainId: "8453",
+      tokenAddress: TOKEN_ADDRESS,
+      perTransactionLimitBaseUnits: "1000000",
+      dailyLimitBaseUnits: "10000000",
+      approvalPolicy: "approval_required",
+      status: "active",
+    });
+    await repo.addRecipient({ workspaceId: workspace.id, alias: "blossom", walletAddress: BLOSSOM_ADDRESS, createdBy: "1" });
+    await repo.addRecipient({ workspaceId: workspace.id, alias: "endurance", walletAddress: ENDURANCE_ADDRESS, createdBy: "1" });
+    await repo.addWorkspaceMember({ workspaceId: workspace.id, telegramUserId: "123456", role: "member" });
+    await repo.removeWorkspaceMember(workspace.id, "123456");
+    const member = await repo.getWorkspaceMember(workspace.id, "123456");
+    const context: AgentPlannerContext = { repo, workspace, member, userId: "123456", claimExpiryHours: 168 };
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES, context);
+    assert.equal(decision.decision, "blocked");
+  });
+
+  it("18. blocks when the workspace or member context is missing", async () => {
+    const noWorkspace = await makeBatchContext({ workspace: false });
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES, noWorkspace.context);
+    assert.equal(decision.decision, "blocked");
+    if (decision.decision === "blocked") assert.match(decision.reason, /Workspace context/i);
+
+    const noMember = await makeBatchContext({ member: false });
+    const memberDecision = await planBatch("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES, noMember.context);
+    assert.equal(memberDecision.decision, "blocked");
+  });
+
+  it("26. batch decisions never carry transaction hashes or execution ids", async () => {
+    const { context } = await makeBatchContext();
+    const decision = await planBatch("pay blossom and endurance 0.01 USDC each", BATCH_ALIASES, context);
+    const serialized = JSON.stringify(decision);
+    assert.equal(serialized.includes("transactionHash"), false);
+    assert.equal(serialized.includes("transaction_hash"), false);
+    assert.equal(serialized.includes("keeperhub_execution_id"), false);
+    assert.equal(serialized.includes("executionId"), false);
+  });
+});
+
 describe("agent planner — unsupported and safety", () => {
   it("returns unsupported for an unsupported intent", async () => {
     const { decision } = await planFor("hello world");

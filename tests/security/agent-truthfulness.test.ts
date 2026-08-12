@@ -200,6 +200,13 @@ describe("agent truthfulness — reply contract", () => {
     assertNoTruthClaims(reply.text, "failed");
   });
 
+  it("24. batch unsupported replies never claim execution, proof, or hashes", () => {
+    const reply = formatAgentServiceResult({ outcome: "unsupported", reason: "Batch payments are not wired yet." });
+    assert.match(reply.text, /couldn't safely/i);
+    assertNoTruthClaims(reply.text, "batch unsupported");
+    assert.equal(reply.text.includes("prepared"), false, "must not claim a prepared batch was persisted");
+  });
+
   it("8. hostile provider output claiming completion with a fake hash still fails closed", async () => {
     const { repo, workspace, member } = await makeWorkspaceFixture();
     const hostile = {

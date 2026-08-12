@@ -96,6 +96,25 @@ function validPlan(action: "prepare_payment" | "create_claim_link" | "inspect_pa
   }
 }
 
+function validBatchPlan(): AgentPlan {
+  return {
+    action: "prepare_batch_payment",
+    batch: {
+      recipients: [
+        { label: "blossom", address: VALID_ADDRESS_LOWER, amountBaseUnits: "10000", memo: null },
+        { label: "endurance", address: VALID_ADDRESS, amountBaseUnits: "10000", memo: null },
+      ],
+      totalAmountBaseUnits: "20000",
+      currency: "USDC",
+      chainId: "8453",
+      tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      approvalRequired: true,
+      policyReason: "Community batch payouts require approval by an owner or approver.",
+      memo: null,
+    },
+  };
+}
+
 function validResult(): AgentResult {
   return {
     intent: validIntent(),
@@ -363,18 +382,62 @@ describe("agent schema contracts", () => {
   });
 
   describe("AgentPlan validation", () => {
-    it("accepts all five supported plan actions", () => {
+    it("accepts all supported plan actions", () => {
       const plans: AgentPlan[] = [
         { action: "ask_clarifying_question", missingFields: ["amount"], question: "How much should I send?" },
         validPlan("prepare_payment"),
         validPlan("create_claim_link"),
         validPlan("inspect_payment_status"),
         { action: "decline_unsupported", reason: "No verified recipient." },
+        validBatchPlan(),
       ];
       for (const plan of plans) {
         const result = validateAgentPlan(plan);
         assert.equal(result.ok, true, JSON.stringify(plan));
       }
+    });
+
+    it("accepts a prepare_batch_payment plan with a lowercase and checksummed address mix", () => {
+      const result = validateAgentPlan(validBatchPlan());
+      assert.equal(result.ok, true);
+    });
+
+    it("rejects a prepare_batch_payment plan with fewer than two recipients", () => {
+      const plan = validBatchPlan();
+      if (plan.action !== "prepare_batch_payment") throw new Error("not a batch plan");
+      const result = validateAgentPlan({ ...plan, batch: { ...plan.batch, recipients: plan.batch.recipients.slice(0, 1) } });
+      assert.equal(result.ok, false);
+    });
+
+    it("rejects a prepare_batch_payment plan with a malformed recipient address", () => {
+      const plan = validBatchPlan();
+      if (plan.action !== "prepare_batch_payment") throw new Error("not a batch plan");
+      const result = validateAgentPlan({
+        ...plan,
+        batch: { ...plan.batch, recipients: [{ ...plan.batch.recipients[0], address: "0xzzz" }] },
+      });
+      assert.equal(result.ok, false);
+    });
+
+    it("rejects a prepare_batch_payment plan whose total does not equal the sum of items", () => {
+      const plan = validBatchPlan();
+      if (plan.action !== "prepare_batch_payment") throw new Error("not a batch plan");
+      const result = validateAgentPlan({ ...plan, batch: { ...plan.batch, totalAmountBaseUnits: "30000" } });
+      assert.equal(result.ok, false);
+    });
+
+    it("rejects a prepare_batch_payment plan with approvalRequired false", () => {
+      const plan = validBatchPlan();
+      if (plan.action !== "prepare_batch_payment") throw new Error("not a batch plan");
+      const result = validateAgentPlan({ ...plan, batch: { ...plan.batch, approvalRequired: false } });
+      assert.equal(result.ok, false);
+    });
+
+    it("rejects a prepare_batch_payment plan with an unknown extra key", () => {
+      const plan = validBatchPlan();
+      if (plan.action !== "prepare_batch_payment") throw new Error("not a batch plan");
+      const result = validateAgentPlan({ ...plan, batch: { ...plan.batch, execute: true } });
+      assert.equal(result.ok, false);
     });
 
     it("rejects unknown plan actions", () => {
@@ -544,7 +607,7 @@ describe("agent schema contracts", () => {
     it("exposes bounded action, intent and plan vocabularies", () => {
       assert.deepEqual(AGENT_ACTIONS, ["pay", "claim_pay", "status", "unknown", "batch_pay"]);
       assert.deepEqual(AGENT_INTENT_KINDS, ["prepare_payment", "create_claim_link", "inspect_payment_status", "clarify_missing_fields", "unsupported", "prepare_batch_payment"]);
-      assert.deepEqual(AGENT_PLAN_ACTIONS, ["ask_clarifying_question", "prepare_payment", "create_claim_link", "inspect_payment_status", "decline_unsupported"]);
+      assert.deepEqual(AGENT_PLAN_ACTIONS, ["ask_clarifying_question", "prepare_payment", "create_claim_link", "inspect_payment_status", "decline_unsupported", "prepare_batch_payment"]);
     });
 
     it("classifies every agent action into a bounded intent kind", () => {

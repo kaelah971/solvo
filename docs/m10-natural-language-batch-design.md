@@ -363,6 +363,51 @@ updated **in the same commit** that implements the behavior.
 | Message-length abuse (huge recipient lists) | NL cap 10 recipients + existing input-length cap |
 | Claim-batch scope creep | Explicitly deferred to M11/M10.x with no mixed decision shape |
 
+## M10.4 planner (implemented)
+
+- **Parsed batch intents now produce a planner-level `prepared_batch_payment`
+  decision** for valid G1/G2/G3 intents (`AgentPlannerDecision` /
+  `PreparedBatchData` in `src/server/agent/planner.ts`). The decision carries
+  resolved recipients (label, normalized address, per-item base units +
+  display decimal, memo), totals (base units + display), USDC/Base 8453,
+  workspace token address, `approvalRequired: true`, the policy reason,
+  per-tx limit + remaining-per-tx display, the batch reason, the grammar
+  mode, `source: "natural_language"`, and a reserved empty `warnings[]`.
+- **No DB persistence yet.** The planner only resolves + validates; it never
+  creates a payout, payout_item, or claim. The service maps the decision to a
+  terminal run (`decision_type = prepared_batch_payment`) and still returns
+  the safe `unsupported` outcome ("Batch payments are not wired yet.").
+- **Telegram/service still no-artifact until the M10.5 bridge.** Routing
+  replies stay "couldn't safely process"; corpus expectations flip from
+  `batch_parsed` to `planner_prepared_batch` only for valid G1/G2/G3 entries,
+  while hazard/deferred/unsafe/judge/missing entries keep their safe
+  outcomes. `/batch` and other slash commands still bypass the agent flow.
+- **Planner checks implemented (all-or-clarify, fail closed):**
+  1. community workspace + active member gate (Judge/private/etc. blocked);
+  2. extraction safety gate (unsafe markers, unsupported token/chain blocked);
+  3. batch currency USDC and chain Base (8453);
+  4. 2–10 recipients;
+  5. every leg resolved — alias legs via `resolveRecipientTool` against the
+     recipient directory, explicit `0x` legs validated (zero address blocked);
+     unresolved/ambiguous legs → `ask_clarifying_question(["recipient"])`;
+  6. duplicate normalized addresses (including alias+address resolving to
+     the same wallet) → whole batch blocked;
+  7. all amounts positive;
+  8. per-item per-transaction limit and total daily limit via the existing
+     pure `evaluateBatchRequest` policy (daily spend computed with the same
+     states window as the M5 `/batch` command path); any block returns
+     `blocked` with the policy reason verbatim.
+- **Policy behavior:** NL batches are capped at **10 recipients** (stricter
+  than the command path's `BATCH_MAX_ITEMS = 20`). Per-item amounts must be
+  within the workspace per-transaction limit and the batch total within the
+  remaining daily limit; the approval-time re-check in the transition
+  transaction remains authoritative once M10.5 persists payouts. No existing
+  M5 slash batch behavior is weakened.
+- **Boundaries held:** the planner imports only the pure `evaluateBatchRequest`
+  policy helper (no execution service, no KeeperHub, no Telegram webhook);
+  the decision never contains a transaction hash or execution id; no new
+  model-facing tools were added; Judge Mode behavior is untouched.
+
 ## M10.3 parser (implemented)
 
 - **Deterministic parser implemented for G1/G2/G3** in

@@ -29,7 +29,9 @@ export type AgentPhraseExpectation =
   | "unsupported"
   | "inert"
   /** M10: interpreter parses the batch intent; planner/service still no artifact. */
-  | "batch_parsed";
+  | "batch_parsed"
+  /** M10.4: the planner produces a prepared_batch_payment decision; no persistence yet. */
+  | "planner_prepared_batch";
 
 export type AgentPhraseArtifact = "payout_pending_approval" | "claim_only" | "no_artifact" | "no_mutation";
 
@@ -198,7 +200,7 @@ export const AGENT_REAL_WORLD_PHRASES: readonly AgentPhrase[] = [
   { id: "judge-006", phrase: "use judge mode to pay me", category: "judge_confusion", expectation: "clarification", artifact: "no_artifact", supported: "now", safety: "No judge NL route; missing fields clarify." },
 
   // ── 8. Batch / distribute future phrases ─────────────────────────────────
-  { id: "batch-001", phrase: "pay blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "batch_parsed", artifact: "no_artifact", supported: "now", safety: "M10.3 parser recognizes G1 batch intent; planner still creates nothing until M10.4." },
+  { id: "batch-001", phrase: "pay blossom and endurance 0.01 USDC each", category: "batch_future", expectation: "planner_prepared_batch", artifact: "no_artifact", supported: "now", safety: "M10.4 planner prepares the batch decision; no payout/payout_item until the M10.5 bridge." },
   { id: "batch-002", phrase: "pay blossom and mike 0.01 USDC", category: "batch_future", expectation: "clarification", artifact: "no_artifact", supported: "future", safety: "Second (unregistered) name still makes it ambiguous." },
   { id: "batch-003", phrase: "send 0.01 USDC to blossom and endurance", category: "batch_future", expectation: "clarification", artifact: "no_artifact", supported: "future", safety: "Two named recipients = ambiguous." },
   { id: "batch-004", phrase: "split 0.05 USDC between the team", category: "batch_future", expectation: "unsupported", artifact: "no_artifact", supported: "future", safety: "No payment verb; declines." },

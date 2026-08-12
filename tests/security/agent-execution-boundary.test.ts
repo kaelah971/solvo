@@ -200,4 +200,23 @@ describe("agent execution authority boundary", () => {
     // import contracts above).
     assert.equal(repo.auditEvents.some((e) => e.event_type === "approval_granted"), false);
   });
+
+  it("19. parsed NL batch phrases create no payout or claim until the M10.5 bridge", async () => {
+    const { repo, workspace } = await makeFixture();
+    const result = await run("pay daniel and 0x1234567890abcdef1234567890abcdef12345678 0.01 USDC each", depsFor(repo));
+    // M10.4: the planner decision exists and is recorded, but the service
+    // still surfaces unsupported with ZERO artifacts until the bridge lands.
+    assert.equal(result.outcome, "unsupported");
+    assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:prepare"), null);
+    assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0);
+    assert.equal(repo.executionAttempts.size, 0);
+    const record = await repo.getAgentRunByIdempotencyKey("tg:-100777:m1:agent");
+    assert.ok(record);
+    assert.equal(record.decision_type, "prepared_batch_payment");
+    assert.equal(record.payout_id, null, "the batch run links no payout");
+    assert.equal(record.claim_id, null, "the batch run links no claim");
+    const types = repo.auditEvents.map((event) => event.event_type);
+    assert.equal(types.includes("request_created"), false);
+    assert.equal(types.includes("approval_required"), false);
+  });
 });

@@ -390,7 +390,7 @@ export function validateAgentInterpretation(raw: unknown): ValidationResult<Agen
 
 export function validateAgentPlan(raw: unknown): ValidationResult<AgentPlan> {
   if (!isRecord(raw) || !isAgentPlanAction(raw.action)) {
-    return fail("plan.action: must be one of ask_clarifying_question, prepare_payment, create_claim_link, inspect_payment_status, decline_unsupported");
+    return fail("plan.action: must be one of ask_clarifying_question, prepare_payment, create_claim_link, inspect_payment_status, decline_unsupported, prepare_batch_payment");
   }
   switch (raw.action) {
     case "ask_clarifying_question": {
@@ -437,6 +437,63 @@ export function validateAgentPlan(raw: unknown): ValidationResult<AgentPlan> {
     case "decline_unsupported": {
       if (!hasOnlyKeys(raw, ["action", "reason"])) return fail("plan: has unknown keys");
       if (!isString(raw.reason) || raw.reason.length === 0) return fail("plan.reason: required");
+      return ok(raw as unknown as AgentPlan);
+    }
+    case "prepare_batch_payment": {
+      if (!hasOnlyKeys(raw, ["action", "batch"])) return fail("plan: has unknown keys");
+      if (!isRecord(raw.batch)) return fail("plan.batch: must be an object");
+      if (
+        !hasOnlyKeys(raw.batch, [
+          "recipients",
+          "totalAmountBaseUnits",
+          "currency",
+          "chainId",
+          "tokenAddress",
+          "approvalRequired",
+          "policyReason",
+          "memo",
+        ])
+      ) {
+        return fail("plan.batch: has unknown keys");
+      }
+      if (!Array.isArray(raw.batch.recipients) || raw.batch.recipients.length < 2 || raw.batch.recipients.length > MAX_BATCH_RECIPIENTS) {
+        return fail(`plan.batch.recipients: must be 2-${MAX_BATCH_RECIPIENTS} entries`);
+      }
+      for (const entry of raw.batch.recipients) {
+        if (!isRecord(entry) || !hasOnlyKeys(entry, ["label", "address", "amountBaseUnits", "memo"])) {
+          return fail("plan.batch.recipients: entry has unknown keys");
+        }
+        if (!isString(entry.label) || entry.label.length === 0) return fail("plan.batch.recipients: label required");
+        if (!isString(entry.address) || !HEX_ADDRESS_PATTERN.test(entry.address)) {
+          return fail("plan.batch.recipients: address must be a 40-hex 0x address");
+        }
+        if (!isWellFormedBaseUnits(entry.amountBaseUnits)) {
+          return fail("plan.batch.recipients: amountBaseUnits must be positive integer base units");
+        }
+        if (entry.memo !== null && (!isString(entry.memo) || entry.memo.length > MEMO_MAX_LENGTH)) {
+          return fail(`plan.batch.recipients: memo must be a string of at most ${MEMO_MAX_LENGTH} characters or null`);
+        }
+      }
+      if (!isWellFormedBaseUnits(raw.batch.totalAmountBaseUnits)) {
+        return fail("plan.batch.totalAmountBaseUnits: must be positive integer base units");
+      }
+      if (raw.batch.currency !== "USDC") return fail("plan.batch.currency: only USDC is supported");
+      if (!isString(raw.batch.chainId) || raw.batch.chainId.length === 0) return fail("plan.batch.chainId: required");
+      if (!isString(raw.batch.tokenAddress) || !HEX_ADDRESS_PATTERN.test(raw.batch.tokenAddress)) {
+        return fail("plan.batch.tokenAddress: must be a 40-hex 0x address");
+      }
+      if (raw.batch.approvalRequired !== true) return fail("plan.batch.approvalRequired: must be true");
+      if (!isString(raw.batch.policyReason) || raw.batch.policyReason.length === 0) {
+        return fail("plan.batch.policyReason: required");
+      }
+      if (raw.batch.memo !== null && (!isString(raw.batch.memo) || raw.batch.memo.length > MEMO_MAX_LENGTH)) {
+        return fail(`plan.batch.memo: must be a string of at most ${MEMO_MAX_LENGTH} characters or null`);
+      }
+      const batch = raw.batch as unknown as Extract<AgentPlan, { action: "prepare_batch_payment" }>["batch"];
+      const sum = batch.recipients.reduce((acc, recipient) => acc + BigInt(recipient.amountBaseUnits), 0n);
+      if (sum.toString() !== batch.totalAmountBaseUnits) {
+        return fail("plan.batch.totalAmountBaseUnits: must equal the sum of recipient amounts");
+      }
       return ok(raw as unknown as AgentPlan);
     }
   }

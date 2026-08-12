@@ -1,5 +1,6 @@
 import type { SolvoRepository } from "../db/repository.ts";
 import type { WorkspaceMemberRow, WorkspaceRow } from "../db/types.ts";
+import { evaluateBatchRequest } from "../telegram/policy.ts";
 import { canonicalizeAmountLocal, usdcToBaseUnitsLocal, type ExtractionResult } from "./extraction.ts";
 import { validateAgentInterpretation } from "./schema.ts";
 import {
@@ -9,7 +10,7 @@ import {
   validateClaimRequestTool,
   type AgentToolContext,
 } from "./tools.ts";
-import type { AgentInterpretation, MissingFieldKey } from "./types.ts";
+import type { AgentInterpretation, BatchPaymentMode, MissingFieldKey } from "./types.ts";
 
 /**
  * M8 — Deterministic agent planner.
@@ -59,12 +60,51 @@ export type StatusVisibleData = {
   completedAt: string | null;
 };
 
+/**
+ * One resolved batch leg. `address` is the normalized EVM destination; the
+ * label is the alias (lowercase) or a short "0x1234…" address — display only,
+ * never authoritative. Amounts are canonical integer base units plus a
+ * display-only USDC decimal (the bridge re-derives money from base units).
+ */
+export type PreparedBatchRecipientData = {
+  label: string;
+  address: string;
+  amountBaseUnits: string;
+  amountDisplay: string;
+  memo: string | null;
+};
+
+/**
+ * M10.4 — a planner-level prepared batch (pending human approval). Pure
+ * proposal data: nothing here persists, approves, or executes. Persistence
+ * lands in M10.5 via an application-owned bridge.
+ */
+export type PreparedBatchData = {
+  recipients: PreparedBatchRecipientData[];
+  totalAmountBaseUnits: string;
+  totalAmountDisplay: string;
+  currency: "USDC";
+  chainId: string;
+  tokenAddress: string;
+  approvalRequired: true;
+  policyReason: string;
+  perTxLimitUsdc: string | null;
+  remainingPerTxUsdc: string | null;
+  memo: string | null;
+  /** Parsed grammar mode (uniform "each", equal split, explicit amounts). */
+  mode: BatchPaymentMode;
+  source: "natural_language";
+  /** Reserved for future safe user-facing warnings; v1 decisions never populate it. */
+  warnings: string[];
+};
+
 export type AgentPlannerDecision =
   | { decision: "ask_clarifying_question"; planAction: "ask_clarifying_question"; missingFields: MissingFieldKey[]; question: string }
   | { decision: "prepared_payment"; planAction: "prepare_payment"; prepared: PreparedPaymentData }
   | { decision: "prepared_claim_link"; planAction: "create_claim_link"; prepared: PreparedClaimData }
   | { decision: "status_visible"; planAction: "inspect_payment_status"; status: StatusVisibleData }
   | { decision: "status_not_found"; planAction: "inspect_payment_status"; payoutId: string }
+  | { decision: "prepared_batch_payment"; planAction: "prepare_batch_payment"; batch: PreparedBatchData }
   | { decision: "blocked"; planAction: "decline_unsupported"; reason: string }
   | { decision: "unsupported"; planAction: "decline_unsupported"; reason: string };
 
@@ -93,14 +133,10 @@ export class AgentPlanner {
       case "unsupported":
         return { decision: "unsupported", planAction: "decline_unsupported", reason: interpretation.summary };
       case "prepare_batch_payment":
-        // M10.3: the parser recognizes batch intent; planning/persistence
-        // lands in M10.4/M10.5. Until then the planner fails safe with no
-        // payout or claim artifacts.
-        return {
-          decision: "unsupported",
-          planAction: "decline_unsupported",
-          reason: "Batch payments are not wired yet.",
-        };
+        // M10.4: parsed NL batch intents become a planner-level
+        // prepared_batch_payment decision (all-or-clarify, policy-checked).
+        // No persistence here — the M10.5 bridge owns payout creation.
+        return this.planBatch(extraction, interpretation);
     }
   }
 
@@ -273,6 +309,140 @@ export class AgentPlanner {
     }
   }
 
+  // ── Batch payment planning (M10.4) ───────────────────────────────────────
+
+  /**
+   * Plans a parsed NL batch intent into a `prepared_batch_payment` decision.
+   * The decision exists ONLY when every leg resolves to a verified
+   * destination, no two legs share an address, every amount is positive, the
+   * workspace is community with an active member, and the deterministic batch
+   * policy (evaluateBatchRequest — per-item per-tx limits + daily total)
+   * passes. Any failure returns a clarification or a safe decline — never a
+   * partial batch, and never a payout/claim artifact (M10.5 owns persistence).
+   */
+  private async planBatch(extraction: ExtractionResult, interpretation: AgentInterpretation): Promise<AgentPlannerDecision> {
+    const safety = this.safetyGate(extraction);
+    if (safety) return safety;
+    const gate = this.contextGate();
+    if (gate) return gate;
+
+    const workspace = this.context.workspace as WorkspaceRow;
+    const batch = interpretation.intent.batch;
+    if (batch === null) {
+      return { decision: "unsupported", planAction: "decline_unsupported", reason: "The batch intent is incomplete." };
+    }
+    if (batch.currency !== "USDC") {
+      return { decision: "blocked", planAction: "decline_unsupported", reason: "Only Base USDC batches can be prepared." };
+    }
+    if (batch.chainId !== BASE_CHAIN_ID) {
+      return { decision: "blocked", planAction: "decline_unsupported", reason: "Only Base batches can be prepared." };
+    }
+    if (batch.recipients.length < 2 || batch.recipients.length > BATCH_MAX_PLAN_RECIPIENTS) {
+      return { decision: "blocked", planAction: "decline_unsupported", reason: "A batch requires between 2 and 10 recipients." };
+    }
+
+    // All-or-clarify resolution: every leg must resolve to a verified
+    // destination before any batch decision can exist.
+    const recipients: PreparedBatchRecipientData[] = [];
+    const seenAddresses = new Set<string>();
+    for (const recipient of batch.recipients) {
+      let address: string;
+      if (recipient.address !== null) {
+        if (recipient.address.toLowerCase() === ZERO_ADDRESS) {
+          return { decision: "blocked", planAction: "decline_unsupported", reason: "The zero address is not an acceptable batch recipient." };
+        }
+        address = recipient.address.toLowerCase();
+      } else {
+        const resolution = await resolveRecipientTool(this.toolContext(workspace), { candidate: recipient.label });
+        if (resolution.status === "unresolved" || resolution.status === "ambiguous") {
+          return this.clarify(["recipient"]);
+        }
+        if (resolution.status === "invalid" || resolution.status === "needs_resolution") {
+          return { decision: "blocked", planAction: "decline_unsupported", reason: resolution.reason };
+        }
+        address = resolution.address.toLowerCase();
+      }
+      if (seenAddresses.has(address)) {
+        return {
+          decision: "blocked",
+          planAction: "decline_unsupported",
+          reason: "Duplicate recipient: two batch legs resolve to the same address.",
+        };
+      }
+      seenAddresses.add(address);
+      const amountUnits = BigInt(recipient.amountBaseUnits);
+      if (amountUnits <= 0n) {
+        return { decision: "blocked", planAction: "decline_unsupported", reason: "Every batch amount must be greater than zero." };
+      }
+      recipients.push({
+        label: /^0x/i.test(recipient.label) ? shortAddress(address) : recipient.label.toLowerCase(),
+        address,
+        amountBaseUnits: amountUnits.toString(),
+        amountDisplay: baseUnitsToUsdcDecimal(amountUnits.toString()),
+        memo: null,
+      });
+    }
+
+    // Deterministic policy: per-item per-tx limits + total daily limit
+    // (mirrors the M5 /batch command path; the transactional approval-time
+    // re-check remains authoritative once the M10.5 bridge exists).
+    const dailySpend = await this.context.repo.sumPayoutItemsByWorkspaceStates(
+      workspace.id,
+      DAILY_SPEND_STATES,
+      utcDayStartIso(),
+    );
+    const policy = evaluateBatchRequest({
+      workspaceActive: workspace.status === "active",
+      isMember: this.context.member !== null && this.context.member.status === "active",
+      chainId: workspace.chain_id,
+      tokenAddress: workspace.token_address,
+      items: recipients.map((recipient) => ({
+        amountBaseUnits: recipient.amountBaseUnits,
+        perTransactionLimitBaseUnits: workspace.per_transaction_limit_base_units,
+      })),
+      totalBaseUnits: batch.totalAmountBaseUnits,
+      dailyLimitBaseUnits: workspace.daily_limit_base_units,
+      currentDailySpendBaseUnits: dailySpend,
+    });
+    if (policy.decision === "blocked") {
+      return { decision: "blocked", planAction: "decline_unsupported", reason: policy.reason };
+    }
+
+    const maxItemUnits = recipients.reduce(
+      (max, recipient) => (BigInt(recipient.amountBaseUnits) > max ? BigInt(recipient.amountBaseUnits) : max),
+      0n,
+    );
+    const perTxLimitUsdc =
+      workspace.per_transaction_limit_base_units !== null
+        ? baseUnitsToUsdcDecimal(workspace.per_transaction_limit_base_units)
+        : null;
+    const remainingPerTxUsdc =
+      workspace.per_transaction_limit_base_units !== null
+        ? baseUnitsToUsdcDecimal((BigInt(workspace.per_transaction_limit_base_units) - maxItemUnits).toString())
+        : null;
+
+    return {
+      decision: "prepared_batch_payment",
+      planAction: "prepare_batch_payment",
+      batch: {
+        recipients,
+        totalAmountBaseUnits: batch.totalAmountBaseUnits,
+        totalAmountDisplay: baseUnitsToUsdcDecimal(batch.totalAmountBaseUnits),
+        currency: "USDC",
+        chainId: workspace.chain_id,
+        tokenAddress: workspace.token_address.toLowerCase(),
+        approvalRequired: true,
+        policyReason: policy.reason,
+        perTxLimitUsdc,
+        remainingPerTxUsdc,
+        memo: batch.memo,
+        mode: batch.mode,
+        source: "natural_language",
+        warnings: [],
+      },
+    };
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   private clarify(missingFields: MissingFieldKey[]): AgentPlannerDecision {
@@ -340,4 +510,36 @@ export class AgentPlanner {
       userId: this.context.userId,
     };
   }
+}
+
+const BASE_CHAIN_ID = "8453";
+const ZERO_ADDRESS = "0x" + "0".repeat(40);
+const BATCH_MAX_PLAN_RECIPIENTS = 10;
+
+/** Daily-spend states mirrored from the M5 /batch command path. */
+const DAILY_SPEND_STATES = [
+  "approved",
+  "simulating",
+  "submitted",
+  "confirming",
+  "completed",
+  "execution_unknown",
+] as const;
+
+function utcDayStartIso(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+}
+
+/** Display-only short address label ("0x1234abcd…"), mirroring the /batch flow. */
+function shortAddress(address: string): string {
+  return `${address.slice(0, 10)}…`;
+}
+
+/** Integer base units → USDC decimal string for display (never authoritative). */
+function baseUnitsToUsdcDecimal(value: string): string {
+  const v = BigInt(value);
+  const whole = v / 1000000n;
+  const fraction = (v % 1000000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return fraction.length === 0 ? whole.toString() : `${whole.toString()}.${fraction}`;
 }

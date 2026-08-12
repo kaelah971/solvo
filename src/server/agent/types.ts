@@ -273,7 +273,8 @@ export type AgentPlanAction =
   | "prepare_payment"
   | "create_claim_link"
   | "inspect_payment_status"
-  | "decline_unsupported";
+  | "decline_unsupported"
+  | "prepare_batch_payment";
 
 export const AGENT_PLAN_ACTIONS: readonly AgentPlanAction[] = [
   "ask_clarifying_question",
@@ -281,6 +282,7 @@ export const AGENT_PLAN_ACTIONS: readonly AgentPlanAction[] = [
   "create_claim_link",
   "inspect_payment_status",
   "decline_unsupported",
+  "prepare_batch_payment",
 ];
 
 export function isAgentPlanAction(value: unknown): value is AgentPlanAction {
@@ -299,7 +301,25 @@ export type AgentPlan =
     }
   | { action: "create_claim_link"; claim: { amountBaseUnits: string } }
   | { action: "inspect_payment_status"; payoutId: string | null }
-  | { action: "decline_unsupported"; reason: string };
+  | { action: "decline_unsupported"; reason: string }
+  | {
+      action: "prepare_batch_payment";
+      batch: {
+        recipients: Array<{
+          label: string;
+          address: string;
+          amountBaseUnits: string;
+          memo: string | null;
+        }>;
+        totalAmountBaseUnits: string;
+        currency: "USDC";
+        chainId: string;
+        tokenAddress: string;
+        approvalRequired: true;
+        policyReason: string;
+        memo: string | null;
+      };
+    };
 
 // ── Result ─────────────────────────────────────────────────────────────────
 
