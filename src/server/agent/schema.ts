@@ -92,6 +92,8 @@ export function isIsoTimestamp(value: unknown): value is string {
 // ── Candidates ─────────────────────────────────────────────────────────────
 
 const CANDIDATE_KEYS = ["sourceField", "raw", "normalized", "validationStatus"] as const;
+/** Amount candidates may carry a token association and base-units form. */
+const CANDIDATE_AMOUNT_KEYS = [...CANDIDATE_KEYS, "token", "baseUnits"] as const;
 const VALIDATION_STATUSES: readonly CandidateValidationStatus[] = ["valid", "invalid", "pending"];
 
 function isCandidateSourceField(value: unknown, allowed: readonly CandidateSourceField[]): value is CandidateSourceField {
@@ -102,9 +104,11 @@ function validateCandidate(
   raw: unknown,
   allowedSourceFields: readonly CandidateSourceField[],
   label: string,
+  extraKeys: readonly string[] = [],
 ): ValidationResult<unknown> {
+  const allowedKeys = [...CANDIDATE_KEYS, ...extraKeys];
   if (!isRecord(raw)) return fail(`${label}: candidate must be an object`);
-  if (!hasOnlyKeys(raw, CANDIDATE_KEYS)) return fail(`${label}: candidate has unknown keys`);
+  if (!hasOnlyKeys(raw, allowedKeys)) return fail(`${label}: candidate has unknown keys`);
   if (!isCandidateSourceField(raw.sourceField, allowedSourceFields)) {
     return fail(`${label}: candidate sourceField must be one of ${allowedSourceFields.join(", ")}`);
   }
@@ -113,13 +117,24 @@ function validateCandidate(
   if (!(VALIDATION_STATUSES as readonly unknown[]).includes(raw.validationStatus)) {
     return fail(`${label}: candidate validationStatus must be valid, invalid or pending`);
   }
+  if (extraKeys.includes("token") && raw.token !== undefined && raw.token !== null && !isString(raw.token)) {
+    return fail(`${label}: candidate token must be a string or null`);
+  }
+  if (extraKeys.includes("baseUnits") && raw.baseUnits !== undefined && raw.baseUnits !== null && !isWellFormedBaseUnits(raw.baseUnits)) {
+    return fail(`${label}: candidate baseUnits must be positive integer base units or null`);
+  }
   return ok(raw);
 }
 
-function validateCandidateArray(raw: unknown, allowedSourceFields: readonly CandidateSourceField[], label: string): ValidationResult<unknown> {
+function validateCandidateArray(
+  raw: unknown,
+  allowedSourceFields: readonly CandidateSourceField[],
+  label: string,
+  extraKeys: readonly string[] = [],
+): ValidationResult<unknown> {
   if (!Array.isArray(raw)) return fail(`${label}: must be an array`);
   for (const entry of raw) {
-    const result = validateCandidate(entry, allowedSourceFields, label);
+    const result = validateCandidate(entry, allowedSourceFields, label, extraKeys);
     if (!result.ok) return result;
   }
   return ok(raw);
@@ -130,17 +145,17 @@ export function validatePaymentCandidates(raw: unknown): ValidationResult<Paymen
   if (!hasOnlyKeys(raw, ["amounts", "tokens", "chains", "addresses", "aliases", "payoutIds", "claimAmounts"])) {
     return fail("candidates: has unknown keys");
   }
-  const checks: Array<{ key: string; fields: readonly CandidateSourceField[]; label: string }> = [
-    { key: "amounts", fields: ["raw_amount"], label: "candidates.amounts" },
+  const checks: Array<{ key: string; fields: readonly CandidateSourceField[]; label: string; extraKeys?: readonly string[] }> = [
+    { key: "amounts", fields: ["raw_amount"], label: "candidates.amounts", extraKeys: CANDIDATE_AMOUNT_KEYS.slice(CANDIDATE_KEYS.length) },
     { key: "tokens", fields: ["raw_token"], label: "candidates.tokens" },
     { key: "chains", fields: ["raw_chain", "workspace_config"], label: "candidates.chains" },
     { key: "addresses", fields: ["raw_address"], label: "candidates.addresses" },
     { key: "aliases", fields: ["raw_alias"], label: "candidates.aliases" },
     { key: "payoutIds", fields: ["raw_payout_id"], label: "candidates.payoutIds" },
-    { key: "claimAmounts", fields: ["raw_amount"], label: "candidates.claimAmounts" },
+    { key: "claimAmounts", fields: ["raw_amount"], label: "candidates.claimAmounts", extraKeys: CANDIDATE_AMOUNT_KEYS.slice(CANDIDATE_KEYS.length) },
   ];
   for (const check of checks) {
-    const result = validateCandidateArray(raw[check.key], check.fields, check.label);
+    const result = validateCandidateArray(raw[check.key], check.fields, check.label, check.extraKeys ?? []);
     if (!result.ok) return result;
   }
   return ok(raw as unknown as PaymentCandidates);

@@ -124,13 +124,24 @@ type CandidateBase = {
   validationStatus: CandidateValidationStatus;
 };
 
-export type CandidateAmount = CandidateBase & { sourceField: "raw_amount" };
+export type CandidateAmount = CandidateBase & {
+  sourceField: "raw_amount";
+  /** Associated token symbol (lowercase) when the amount is directly
+   * followed by a token mention in the source text. */
+  token?: string | null;
+  /** Deterministic integer base units (6-decimal USDC) when well formed. */
+  baseUnits?: string | null;
+};
 export type CandidateToken = CandidateBase & { sourceField: "raw_token" };
 export type CandidateChain = CandidateBase & { sourceField: "raw_chain" | "workspace_config" };
 export type CandidateAddress = CandidateBase & { sourceField: "raw_address" };
 export type CandidateAlias = CandidateBase & { sourceField: "raw_alias" };
 export type CandidatePayoutId = CandidateBase & { sourceField: "raw_payout_id" };
-export type CandidateClaimAmount = CandidateBase & { sourceField: "raw_amount" };
+export type CandidateClaimAmount = CandidateBase & {
+  sourceField: "raw_amount";
+  token?: string | null;
+  baseUnits?: string | null;
+};
 
 export type PaymentCandidates = {
   amounts: CandidateAmount[];
