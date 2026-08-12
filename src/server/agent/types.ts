@@ -298,3 +298,22 @@ export const AGENT_RUN_STATUSES: readonly AgentRunStatus[] = [
 export function isAgentRunStatus(value: unknown): value is AgentRunStatus {
   return (AGENT_RUN_STATUSES as readonly unknown[]).includes(value);
 }
+
+/**
+ * Statuses that finish an agent run's orchestration (the run will not be
+ * updated again). "prepared" / "claim_created" mean the application prepared
+ * or linked a payout/claim — they are orchestration outcomes, NOT payment
+ * completion. Payment truth always lives in the payout/claim pipeline.
+ */
+export const AGENT_RUN_TERMINAL_OUTCOMES: readonly AgentRunStatus[] = [
+  "needs_clarification",
+  "prepared",
+  "claim_created",
+  "blocked",
+  "unknown",
+  "failed",
+];
+
+export function isAgentRunTerminalOutcome(value: AgentRunStatus): boolean {
+  return (AGENT_RUN_TERMINAL_OUTCOMES as readonly AgentRunStatus[]).includes(value);
+}

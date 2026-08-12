@@ -1,5 +1,7 @@
 import type { ExecutionState } from "../execution/state-machine.ts";
+import type { AgentRunStatus } from "../agent/types.ts";
 import type {
+  AgentRunRow,
   AuditEventRow,
   ClaimLinkRow,
   ClaimStatus,
@@ -87,6 +89,35 @@ export type AppendAuditEventInput = {
   actorType: string;
   actorId?: string | null;
   metadata?: Record<string, unknown>;
+};
+
+export type CreateAgentRunInput = {
+  workspaceId: string | null;
+  surface: string;
+  telegramChatId: string | null;
+  telegramUserId: string | null;
+  telegramMessageId: string | null;
+  idempotencyKey: string;
+  provider: string;
+  status?: AgentRunStatus;
+  inputHash: string;
+  rawTextRedacted?: string | null;
+  candidatesJson?: Record<string, unknown> | null;
+  /** Optional caller-supplied start time; defaults to the DB clock. */
+  startedAt?: string | null;
+};
+
+export type UpdateAgentRunInput = {
+  status?: AgentRunStatus;
+  intentKind?: string | null;
+  planAction?: string | null;
+  decisionType?: string | null;
+  interpretationJson?: Record<string, unknown> | null;
+  decisionJson?: Record<string, unknown> | null;
+  payoutId?: string | null;
+  claimId?: string | null;
+  errorCode?: string | null;
+  errorMessageRedacted?: string | null;
 };
 
 /**
@@ -232,4 +263,12 @@ export interface SolvoRepository {
   transitionClaimStatus(id: string, from: readonly ClaimStatus[], to: ClaimStatus): Promise<ClaimLinkRow>;
 
   setClaimPayoutId(id: string, payoutId: string): Promise<ClaimLinkRow>;
+
+  // ── M8 agent runs (observational; never a payout/claim state machine) ──
+
+  createAgentRun(input: CreateAgentRunInput): Promise<AgentRunRow>;
+  getAgentRunByIdempotencyKey(idempotencyKey: string): Promise<AgentRunRow | null>;
+  getAgentRunById(id: string): Promise<AgentRunRow | null>;
+  updateAgentRun(id: string, input: UpdateAgentRunInput): Promise<AgentRunRow>;
+  countAgentRunsSince(input: { telegramUserId: string; sinceIso: string }): Promise<number>;
 }

@@ -6,19 +6,23 @@ import {
   isExecutionState,
   type ExecutionState,
 } from "../execution/state-machine.ts";
+import { isAgentRunStatus, isAgentRunTerminalOutcome } from "../agent/types.ts";
 import type {
   AddRecipientInput,
   AppendAuditEventInput,
+  CreateAgentRunInput,
   CreateExecutionAttemptInput,
   CreateMemberInput,
   CreatePayoutInput,
   CreatePayoutItemInput,
   CreateWorkspaceInput,
   SolvoRepository,
+  UpdateAgentRunInput,
   UpdateExecutionAttemptInput,
 } from "./repository.ts";
 import {
   canClaimTransition,
+  type AgentRunRow,
   type AuditEventRow,
   type ClaimLinkRow,
   type ClaimStatus,
@@ -50,6 +54,7 @@ export class MemoryRepository implements SolvoRepository {
   executionAttempts = new Map<string, ExecutionAttemptRow>();
   auditEvents: AuditEventRow[] = [];
   claimLinks = new Map<string, ClaimLinkRow>();
+  agentRuns = new Map<string, AgentRunRow>();
 
   /**
    * Mirrors Postgres transaction semantics: transactions are serialized (like
@@ -75,6 +80,7 @@ export class MemoryRepository implements SolvoRepository {
     const executionAttempts = new Map(this.executionAttempts);
     const auditEvents = [...this.auditEvents];
     const claimLinks = new Map(this.claimLinks);
+    const agentRuns = new Map(this.agentRuns);
     try {
       return await fn(this);
     } catch (error) {
@@ -86,6 +92,7 @@ export class MemoryRepository implements SolvoRepository {
       this.executionAttempts = executionAttempts;
       this.auditEvents = auditEvents;
       this.claimLinks = claimLinks;
+      this.agentRuns = agentRuns;
       throw error;
     } finally {
       release();
@@ -626,5 +633,92 @@ export class MemoryRepository implements SolvoRepository {
     const updated = { ...row, payout_id: payoutId, updated_at: nowIso() };
     this.claimLinks.set(id, updated);
     return updated;
+  }
+
+  // ── M8 agent runs (observational; never a payout/claim state machine) ──
+
+  async createAgentRun(input: CreateAgentRunInput): Promise<AgentRunRow> {
+    const status = input.status ?? "received";
+    if (!isAgentRunStatus(status)) {
+      throw new Error(`invalid agent run status: ${status}`);
+    }
+    const existing = [...this.agentRuns.values()].find((run) => run.idempotency_key === input.idempotencyKey);
+    if (existing) {
+      throw new Error(`agent run idempotency key ${input.idempotencyKey} violates unique constraint`);
+    }
+    const now = nowIso();
+    const row: AgentRunRow = {
+      id: randomUUID(),
+      workspace_id: input.workspaceId,
+      surface: input.surface,
+      telegram_chat_id: input.telegramChatId,
+      telegram_user_id: input.telegramUserId,
+      telegram_message_id: input.telegramMessageId,
+      idempotency_key: input.idempotencyKey,
+      provider: input.provider,
+      status,
+      intent_kind: null,
+      plan_action: null,
+      decision_type: null,
+      input_hash: input.inputHash,
+      raw_text_redacted: input.rawTextRedacted ?? null,
+      candidates_json: input.candidatesJson ?? {},
+      interpretation_json: null,
+      decision_json: null,
+      error_code: null,
+      error_message_redacted: null,
+      started_at: input.startedAt ?? now,
+      completed_at: null,
+      created_at: now,
+      updated_at: now,
+      payout_id: null,
+      claim_id: null,
+    };
+    this.agentRuns.set(row.id, row);
+    return row;
+  }
+
+  async getAgentRunByIdempotencyKey(idempotencyKey: string): Promise<AgentRunRow | null> {
+    return [...this.agentRuns.values()].find((run) => run.idempotency_key === idempotencyKey) ?? null;
+  }
+
+  async getAgentRunById(id: string): Promise<AgentRunRow | null> {
+    return this.agentRuns.get(id) ?? null;
+  }
+
+  async updateAgentRun(id: string, input: UpdateAgentRunInput): Promise<AgentRunRow> {
+    const row = this.agentRuns.get(id);
+    if (!row) throw new Error(`agent_runs: record not found: ${id}`);
+    if (input.status !== undefined && !isAgentRunStatus(input.status)) {
+      throw new Error(`invalid agent run status: ${input.status}`);
+    }
+    const updated: AgentRunRow = {
+      ...row,
+      status: input.status ?? row.status,
+      intent_kind: input.intentKind !== undefined ? input.intentKind : row.intent_kind,
+      plan_action: input.planAction !== undefined ? input.planAction : row.plan_action,
+      decision_type: input.decisionType !== undefined ? input.decisionType : row.decision_type,
+      interpretation_json:
+        input.interpretationJson !== undefined ? input.interpretationJson : row.interpretation_json,
+      decision_json: input.decisionJson !== undefined ? input.decisionJson : row.decision_json,
+      payout_id: input.payoutId !== undefined ? input.payoutId : row.payout_id,
+      claim_id: input.claimId !== undefined ? input.claimId : row.claim_id,
+      error_code: input.errorCode !== undefined ? input.errorCode : row.error_code,
+      error_message_redacted:
+        input.errorMessageRedacted !== undefined ? input.errorMessageRedacted : row.error_message_redacted,
+      updated_at: nowIso(),
+    };
+    if (input.status !== undefined && isAgentRunTerminalOutcome(input.status)) {
+      // COALESCE semantics: the first completion time is preserved.
+      updated.completed_at = row.completed_at ?? nowIso();
+    }
+    this.agentRuns.set(id, updated);
+    return updated;
+  }
+
+  async countAgentRunsSince(input: { telegramUserId: string; sinceIso: string }): Promise<number> {
+    return [...this.agentRuns.values()].filter(
+      (run) => run.telegram_user_id === input.telegramUserId && run.started_at >= input.sinceIso,
+    ).length;
   }
 }

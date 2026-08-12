@@ -79,6 +79,8 @@ describeDb("database integration", () => {
   after(async () => {
     if (!cleanupSql) return;
     try {
+      await cleanupSql`DELETE FROM agent_runs WHERE workspace_id = ${workspaceId}`;
+      await cleanupSql`DELETE FROM agent_runs WHERE idempotency_key LIKE 'db-agent-%'`;
       await cleanupSql`DELETE FROM claim_links WHERE workspace_id = ${workspaceId}`;
       await cleanupSql`DELETE FROM audit_events WHERE workspace_id = ${workspaceId}`;
       await cleanupSql`
@@ -332,5 +334,139 @@ describeDb("database integration", () => {
     const strict = await repo.transitionClaimStatus(claim.id, ["claimed"], "approved");
     assert.equal(strict.status, "approved");
     await assert.rejects(repo.transitionClaimStatus(claim.id, ["created"], "cancelled"));
+  });
+
+  it("persists agent runs and enforces the recording-state CHECK (M8)", async () => {
+    const repo = new PostgresRepository(cleanupSql);
+    const idempotencyKey = `db-agent-${randomUUID()}`;
+    const run = await repo.createAgentRun({
+      workspaceId,
+      surface: "telegram",
+      telegramChatId: "-100777",
+      telegramUserId: "123456789",
+      telegramMessageId: "42",
+      idempotencyKey,
+      provider: "static",
+      inputHash: "a".repeat(64),
+      rawTextRedacted: "send 0.01 USDC",
+      candidatesJson: { amounts: ["0.01"] },
+      startedAt: "2026-08-12T00:00:00.000Z",
+    });
+    assert.equal(run.status, "received");
+    assert.equal(run.started_at, "2026-08-12T00:00:00.000Z");
+
+    const byKey = await repo.getAgentRunByIdempotencyKey(idempotencyKey);
+    assert.equal(byKey?.id, run.id);
+    const byId = await repo.getAgentRunById(run.id);
+    assert.equal(byId?.id, run.id);
+
+    // Duplicate idempotency key: unique constraint, no duplicate row.
+    await assert.rejects(
+      () =>
+        repo.createAgentRun({
+          workspaceId,
+          surface: "telegram",
+          telegramChatId: null,
+          telegramUserId: "123456789",
+          telegramMessageId: null,
+          idempotencyKey,
+          provider: "static",
+          inputHash: "b".repeat(64),
+        }),
+      /unique/i,
+    );
+
+    // Payout-machine statuses violate the CHECK constraint.
+    await assert.rejects(
+      () => repo.updateAgentRun(run.id, { status: "completed" as never }),
+      /check constraint|agent_runs_status_check/,
+    );
+
+    // Terminal outcome sets completed_at with COALESCE; updated_at moves.
+    const planned = await repo.updateAgentRun(run.id, { status: "planned" });
+    assert.equal(planned.completed_at, null);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const prepared = await repo.updateAgentRun(run.id, { status: "prepared", decisionType: "prepared_payment", planAction: "prepare_payment", intentKind: "prepare_payment" });
+    assert.notEqual(prepared.completed_at, null);
+    assert.equal(prepared.decision_type, "prepared_payment");
+    const firstCompletion = prepared.completed_at;
+    const blocked = await repo.updateAgentRun(run.id, { status: "blocked" });
+    assert.equal(blocked.completed_at, firstCompletion);
+    assert.notEqual(blocked.updated_at, prepared.updated_at);
+
+    // Invalid surface CHECK.
+    await assert.rejects(
+      () =>
+        repo.createAgentRun({
+          workspaceId: null,
+          surface: "slack",
+          telegramChatId: null,
+          telegramUserId: "1",
+          telegramMessageId: null,
+          idempotencyKey: `db-agent-bad-${randomUUID()}`,
+          provider: "static",
+          inputHash: "c".repeat(64),
+        }),
+      /check constraint|agent_runs_surface_check/,
+    );
+
+    // FK violation for a non-existent workspace.
+    await assert.rejects(
+      () =>
+        repo.createAgentRun({
+          workspaceId: randomUUID(),
+          surface: "telegram",
+          telegramChatId: null,
+          telegramUserId: "1",
+          telegramMessageId: null,
+          idempotencyKey: `db-agent-fk-${randomUUID()}`,
+          provider: "static",
+          inputHash: "d".repeat(64),
+        }),
+      /foreign key/,
+    );
+  });
+
+  it("counts agent runs per user since a timestamp (M8)", async () => {
+    const repo = new PostgresRepository(cleanupSql);
+    const now = new Date();
+    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    const halfHourAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+    await repo.createAgentRun({
+      workspaceId: null,
+      surface: "telegram",
+      telegramChatId: null,
+      telegramUserId: "agent-count-user",
+      telegramMessageId: null,
+      idempotencyKey: `db-agent-count-${randomUUID()}`,
+      provider: "static",
+      inputHash: "e".repeat(64),
+      startedAt: hourAgo,
+    });
+    await repo.createAgentRun({
+      workspaceId: null,
+      surface: "telegram",
+      telegramChatId: null,
+      telegramUserId: "agent-count-user",
+      telegramMessageId: null,
+      idempotencyKey: `db-agent-count-2-${randomUUID()}`,
+      provider: "static",
+      inputHash: "f".repeat(64),
+      startedAt: halfHourAgo,
+    });
+    await repo.createAgentRun({
+      workspaceId: null,
+      surface: "telegram",
+      telegramChatId: null,
+      telegramUserId: "agent-other-user",
+      telegramMessageId: null,
+      idempotencyKey: `db-agent-count-3-${randomUUID()}`,
+      provider: "static",
+      inputHash: "g".repeat(64),
+      startedAt: hourAgo,
+    });
+    assert.equal(await repo.countAgentRunsSince({ telegramUserId: "agent-count-user", sinceIso: hourAgo }), 2);
+    assert.equal(await repo.countAgentRunsSince({ telegramUserId: "agent-count-user", sinceIso: halfHourAgo }), 1);
+    assert.equal(await repo.countAgentRunsSince({ telegramUserId: "agent-other-user", sinceIso: hourAgo }), 1);
   });
 });

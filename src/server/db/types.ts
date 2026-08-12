@@ -1,3 +1,5 @@
+import type { AgentRunStatus } from "../agent/types.ts";
+
 export type WorkspaceMode = "sandbox" | "development" | "personal" | "community" | "judge";
 
 export type ClaimStatus = "created" | "claimed" | "expired" | "cancelled" | "approved" | "executed";
@@ -163,4 +165,37 @@ export type PayoutWithRelations = {
   item: PayoutItemRow;
   payout: PayoutRow;
   workspace: WorkspaceRow;
+};
+
+/**
+ * Observational record of one agent orchestration run. Deliberately carries
+ * NO payout/claim state machine: it only records what the agent proposed,
+ * decided, and linked to. Payment truth lives in payouts / claim_links.
+ */
+export type AgentRunRow = {
+  id: string;
+  workspace_id: string | null;
+  surface: string;
+  telegram_chat_id: string | null;
+  telegram_user_id: string | null;
+  telegram_message_id: string | null;
+  idempotency_key: string;
+  provider: string;
+  status: AgentRunStatus;
+  intent_kind: string | null;
+  plan_action: string | null;
+  decision_type: string | null;
+  input_hash: string;
+  raw_text_redacted: string | null;
+  candidates_json: Record<string, unknown>;
+  interpretation_json: Record<string, unknown> | null;
+  decision_json: Record<string, unknown> | null;
+  error_code: string | null;
+  error_message_redacted: string | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  payout_id: string | null;
+  claim_id: string | null;
 };

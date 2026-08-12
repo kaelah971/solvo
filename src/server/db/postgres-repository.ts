@@ -1,18 +1,22 @@
 import type { Sql } from "postgres";
 
 import { canTransition, StateTransitionError, type ExecutionState } from "../execution/state-machine.ts";
+import { isAgentRunTerminalOutcome, type AgentRunStatus } from "../agent/types.ts";
 import type {
   AddRecipientInput,
   AppendAuditEventInput,
+  CreateAgentRunInput,
   CreateExecutionAttemptInput,
   CreateMemberInput,
   CreatePayoutInput,
   CreatePayoutItemInput,
   CreateWorkspaceInput,
   SolvoRepository,
+  UpdateAgentRunInput,
   UpdateExecutionAttemptInput,
 } from "./repository.ts";
 import type {
+  AgentRunRow,
   AuditEventRow,
   ClaimLinkRow,
   ClaimStatus,
@@ -815,4 +819,117 @@ export class PostgresRepository implements SolvoRepository {
     }
     return mapClaim(rows[0]);
   }
+
+  // ── M8 agent runs (observational; never a payout/claim state machine) ──
+
+  async createAgentRun(input: CreateAgentRunInput): Promise<AgentRunRow> {
+    type JsonParam = Parameters<Sql["json"]>[0];
+    const rows = await this.sql<RawRow[]>`
+      INSERT INTO agent_runs (
+        workspace_id, surface, telegram_chat_id, telegram_user_id, telegram_message_id,
+        idempotency_key, provider, status, input_hash, raw_text_redacted, candidates_json, started_at
+      ) VALUES (
+        ${input.workspaceId}, ${input.surface}, ${input.telegramChatId}, ${input.telegramUserId},
+        ${input.telegramMessageId}, ${input.idempotencyKey}, ${input.provider},
+        ${input.status ?? "received"}, ${input.inputHash}, ${input.rawTextRedacted ?? null},
+        ${this.sql.json((input.candidatesJson ?? {}) as JsonParam)},
+        COALESCE(${input.startedAt ?? null}, clock_timestamp())
+      )
+      RETURNING *
+    `;
+    return mapAgentRun(rows[0]);
+  }
+
+  async getAgentRunByIdempotencyKey(idempotencyKey: string): Promise<AgentRunRow | null> {
+    const rows = await this.sql<RawRow[]>`SELECT * FROM agent_runs WHERE idempotency_key = ${idempotencyKey}`;
+    return rows.length > 0 ? mapAgentRun(rows[0]) : null;
+  }
+
+  async getAgentRunById(id: string): Promise<AgentRunRow | null> {
+    const rows = await this.sql<RawRow[]>`SELECT * FROM agent_runs WHERE id = ${id}`;
+    return rows.length > 0 ? mapAgentRun(rows[0]) : null;
+  }
+
+  async updateAgentRun(id: string, input: UpdateAgentRunInput): Promise<AgentRunRow> {
+    const assignments: string[] = [];
+    const params: unknown[] = [];
+    const set = (column: string, value: unknown) => {
+      assignments.push(`${column} = $${params.length + 1}`);
+      params.push(value);
+    };
+    if (input.status !== undefined) set("status", input.status);
+    if (input.intentKind !== undefined) set("intent_kind", input.intentKind);
+    if (input.planAction !== undefined) set("plan_action", input.planAction);
+    if (input.decisionType !== undefined) set("decision_type", input.decisionType);
+    if (input.interpretationJson !== undefined) {
+      type JsonParam = Parameters<Sql["json"]>[0];
+      params.push(this.sql.json(input.interpretationJson as JsonParam));
+      assignments.push(`interpretation_json = $${params.length}`);
+    }
+    if (input.decisionJson !== undefined) {
+      type JsonParam = Parameters<Sql["json"]>[0];
+      params.push(this.sql.json(input.decisionJson as JsonParam));
+      assignments.push(`decision_json = $${params.length}`);
+    }
+    if (input.payoutId !== undefined) set("payout_id", input.payoutId);
+    if (input.claimId !== undefined) set("claim_id", input.claimId);
+    if (input.errorCode !== undefined) set("error_code", input.errorCode);
+    if (input.errorMessageRedacted !== undefined) set("error_message_redacted", input.errorMessageRedacted);
+    if (input.status !== undefined && isAgentRunTerminalOutcome(input.status)) {
+      assignments.push("completed_at = COALESCE(completed_at, clock_timestamp())");
+    }
+    if (assignments.length === 0) {
+      const current = await this.sql<RawRow[]>`SELECT * FROM agent_runs WHERE id = ${id}`;
+      if (current.length === 0) throw new Error(`agent_runs: record not found: ${id}`);
+      return mapAgentRun(current[0]);
+    }
+    assignments.push("updated_at = now()");
+    type PgParams = NonNullable<Parameters<Sql["unsafe"]>[1]>;
+    const rows = await this.sql.unsafe<RawRow[]>(
+      `UPDATE agent_runs SET ${assignments.join(", ")} WHERE id = $${params.length + 1} RETURNING *`,
+      [...params, id] as unknown as PgParams,
+    );
+    if (rows.length === 0) throw new Error(`agent_runs: record not found: ${id}`);
+    return mapAgentRun(rows[0]);
+  }
+
+  async countAgentRunsSince(input: { telegramUserId: string; sinceIso: string }): Promise<number> {
+    const rows = await this.sql<RawRow[]>`
+      SELECT count(*)::int AS count
+      FROM agent_runs
+      WHERE telegram_user_id = ${input.telegramUserId}
+        AND started_at >= ${input.sinceIso}
+    `;
+    return Number(rows[0]?.count ?? 0);
+  }
+}
+
+function mapAgentRun(row: RawRow): AgentRunRow {
+  return {
+    id: String(row.id),
+    workspace_id: text(row.workspace_id),
+    surface: String(row.surface),
+    telegram_chat_id: text(row.telegram_chat_id),
+    telegram_user_id: text(row.telegram_user_id),
+    telegram_message_id: text(row.telegram_message_id),
+    idempotency_key: String(row.idempotency_key),
+    provider: String(row.provider),
+    status: row.status as AgentRunStatus,
+    intent_kind: text(row.intent_kind),
+    plan_action: text(row.plan_action),
+    decision_type: text(row.decision_type),
+    input_hash: String(row.input_hash),
+    raw_text_redacted: text(row.raw_text_redacted),
+    candidates_json: (row.candidates_json as Record<string, unknown> | null) ?? {},
+    interpretation_json: (row.interpretation_json as Record<string, unknown> | null) ?? null,
+    decision_json: (row.decision_json as Record<string, unknown> | null) ?? null,
+    error_code: text(row.error_code),
+    error_message_redacted: text(row.error_message_redacted),
+    started_at: iso(row.started_at) ?? "",
+    completed_at: iso(row.completed_at),
+    created_at: iso(row.created_at) ?? "",
+    updated_at: iso(row.updated_at) ?? "",
+    payout_id: text(row.payout_id),
+    claim_id: text(row.claim_id),
+  };
 }
