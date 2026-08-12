@@ -48,6 +48,11 @@ No secrets appear in this repository.
 - M8 S3 Telegram conversational UX
 - M9 agent hardening / real-world language QA (216-phrase corpus, mutation
   and tolerance hardening, live-style treasury phrases)
+- M10 natural-language batch / distribute (explicit 2–10 recipient batch
+  phrases — uniform "each", exact split totals, explicit per-recipient
+  amounts; one `pending_approval` payout + N payout_items; idempotent
+  duplicate delivery; no funds move until owner/approver approval; KeeperHub
+  execution only after approval through the existing execution pipeline)
 
 **M8 S3 shipped scope (exactly what is implemented and tested):**
 
@@ -65,6 +70,35 @@ No secrets appear in this repository.
   (`SOLVO_AGENT_PROVIDER=static` is the default; no model calls are made
   unless an operator explicitly enables the provider)
 
+**M10 shipped scope (exactly what is implemented and tested):**
+
+- natural-language batch phrases in community group chats with an explicit
+  batch signal and 2–10 recipients, each resolving to a workspace alias or a
+  valid 0x address (all-or-clarify: one unresolved recipient clarifies the
+  whole request, never a partial batch)
+- uniform per-recipient amounts (`pay blossom and endurance 0.01 USDC each`)
+- exact split totals (`split 0.05 USDC between blossom and endurance`;
+  non-divisible totals clarify, never round)
+- explicit per-recipient amounts (`pay blossom 0.01 USDC and endurance 0.02
+  USDC`)
+- persists ONE `pending_approval` payout with N `payout_items` (canonical M5
+  batch shape, `source_type = telegram_batch`, audit metadata marks
+  `telegram_natural_language_batch`; no schema change)
+- Telegram reply lists recipients, total, and approval-required state, with
+  APPROVE BATCH / REJECT buttons
+- duplicate delivery of the same message is idempotent (same payout, no
+  duplicate items/audits, truthful current state reply)
+- status of a prepared batch reads the payout row, never the agent run
+- no funds move until an owner or approver approves; KeeperHub execution
+  happens only after approval through the existing execution pipeline
+- hostile mutations (approval bypass, execute-now, fabrication, policy
+  bypass, external access) decline with zero artifacts (640+ mutation checks
+  per layer)
+- not shipped: CSV upload, "pay everyone"/"pay all contributors"/group
+  recipients, claim-link batches, private/DM batches, Judge Mode batches,
+  auto-approval, or direct execution from natural language — all remain
+  declined or clarified with zero artifacts
+
 ### In progress
 
 - M8 final integration/review (S3 slice gate complete)
@@ -73,7 +107,6 @@ No secrets appear in this repository.
 
 ### Next
 
-- M10 natural-language batch/distribute
 - M11 smarter claim links
 - M12 web admin dashboard
 - M13 retry/recovery console

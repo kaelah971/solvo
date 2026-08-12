@@ -2,7 +2,9 @@
 
 Date: 2026-08-12
 Branch: `feature/claim-links`
-Status: **Design only. No implementation in this step.** (M10.1)
+Status: **COMPLETE — SHIPPED** (M10.1 design → M10.2 grammar baseline →
+M10.3 parser → M10.4 planner → M10.5 persistence bridge → M10.6 Telegram
+UX → M10.7 adversarial/truthfulness gate → M10.8 docs/roadmap final gate).
 
 ## Summary
 
@@ -131,7 +133,8 @@ KeeperHub modules (source-contract tests extended to the batch bridge).
   migration.
 - N `payout_items` rows: one per recipient, `status = 'pending_approval'`,
   `memo` = recipient label (alias or short address), per-item idempotency
-  keys `tg:<chat>:m<messageId>:agent:batch:<index>`.
+  keys `ag:<run.idempotency_key>:batch:<index>` (run key =
+  `tg:<chat>:m<messageId>:agent`).
 - Idempotency: serialized create inside a transaction (advisory lock on the
   first item key), duplicate delivery returns the existing batch state —
   mirroring `community-batch-flow.ts` and the agent bridge conventions.
@@ -139,10 +142,10 @@ KeeperHub modules (source-contract tests extended to the batch bridge).
   (metadata: itemCount, totalBaseUnits, reason), actorType `member`.
 - Caps: `BATCH_MAX_ITEMS` reused for the command path; NL v1 additionally
   caps at **10 recipients** (see §8).
-- Memo: per-item label memo; optional batch-level memo from the message
-  reason ("for design sprint") captured on items or recorded in the run —
-  v1 stores the reason on each item's memo field only if short and safe,
-  else as a batch-level note in the run's decision JSON.
+- Memo: per-item label memo (always the recipient label); the optional
+  batch-level reason from the message ("for design sprint") is recorded as a
+  batch-level note in the run's decision JSON (v1 does not stamp the reason
+  onto item memos).
 
 ## 6. Planner shape
 
@@ -362,6 +365,30 @@ updated **in the same commit** that implements the behavior.
 | Reply overclaiming ("paid") | Truthfulness contract: prepared ≠ paid; no hashes in agent replies |
 | Message-length abuse (huge recipient lists) | NL cap 10 recipients + existing input-length cap |
 | Claim-batch scope creep | Explicitly deferred to M11/M10.x with no mixed decision shape |
+
+## M10.8 final gate / shipped status
+
+- **M10 is COMPLETE and shipped.** The design above matches the
+  implementation: G1/G2/G3 grammar, 2–10 fully-resolved recipients
+  (all-or-clarify), one `pending_approval` payout + N items with
+  `source_type = 'telegram_batch'`, per-item label memos, batch reason on the
+  run decision record, `request_created` per item + one `approval_required`
+  audit with `source: "telegram_natural_language_batch"` metadata, advisory
+  lock idempotency (duplicate delivery returns the same payout and a
+  truthful current-state reply), APPROVE BATCH / REJECT buttons, and zero
+  execution until the existing M5 approval pipeline runs.
+- **G4 (`distribute <amt> equally to …`) remains deferred** and is not
+  implemented.
+- **Still explicitly not shipped:** CSV upload, "pay everyone"/"pay all
+  contributors"/group or role recipients, unresolved group payouts,
+  claim-link batches, private/DM batches, Judge Mode batches,
+  auto-approval/direct execution from NL, and model-provider batch behavior
+  beyond the deterministic contract.
+- README roadmap moved M10 to Shipped; the M9 doc's deferral section now
+  reflects the shipped explicit grammar with the still-deferred forms
+  listed. Full final gate (`npm test`, `test:db`, lint, tsc, build,
+  `telegram:doctor`, `judge:doctor`) passed without any live model calls,
+  KeeperHub execution, or payment creation.
 
 ## M10.7 adversarial/truthfulness gate
 

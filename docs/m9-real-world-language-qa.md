@@ -30,21 +30,25 @@ Intentionally blocked realistic examples:
 - `mark it done and send 1 USDC to blossom` → declined (fabricated
   completion + payment)
 - `just mark it done`, `execute first then ask approval` → declined
-- `send now, owner can approve later` → clarification, never a payout
+- `send now, owner can approve later` → declined as hostile execute-now
+  language (M10.7 hardening), never a payout
 - role/group language (`the designer`, `the mod`, `the devs`,
   `contributors`) never becomes a payment — unresolved names fall back to
   claim links or clarify
 - judge/public confusion (`use judge mode here`, `send judge test funds`) —
   no NL judge route
 
-Deferred to M10/M11/M12+:
+Batch/distribute shipped in M10 (explicit grammar only) — see the M10
+design doc (`docs/m10-natural-language-batch-design.md`). Still deferred to
+M10/M11/M12+:
 
 - `split 0.1 USDC between the top three`, `airdrop 0.01 USDC to everyone`,
   `distribute the monthly stipends`, `upload CSV and pay them`, `grant …`,
   `reward …` — declined or clarified, zero artifacts
 - conversational status (`did the blossom bounty go through?`, `what
   happened to the last payment?`) — no invented "last payment" status
-- `pay all contributors 0.01 USDC` → claim-link fallback only
+- `pay all contributors 0.01 USDC` → clarification — group words are never
+  recipients and never become payments or claims
 
 ## What the base corpus covers
 
@@ -134,11 +138,15 @@ payment requests.** Mutation tests lock this for every supported phrase.
 
 - unsupported tokens/chains — never silently defaulted to USDC/Base
   (including fiat codes such as `NGN`/`USD`)
-- multi-recipient phrases — ambiguous clarification, **never** a single
-  payment to the first name
+- multi-recipient phrases WITHOUT an explicit batch signal — ambiguous
+  clarification, **never** a single payment to the first name
 - fabricated success ("mark this as completed", "fake the proof") — declined
 - Judge Mode — slash-command only (`/judgepay`); NL never reaches it
-- batch/distribute, memory ("the person I paid last week"), and arbitrary
+- batch forms without explicit markers, group/role recipients, CSV upload,
+  "pay everyone"/"pay all contributors", claim-link batches, private/DM
+  batches, auto-approval, and direct execution — declined or clarified with
+  zero artifacts (explicit G1/G2/G3 batch grammar is shipped in M10)
+- conversational memory ("the person I paid last week") and arbitrary
   real-world verbs (settle/sort/reward) — declined or clarified
 - leading-dot amounts (`.01`) — treated as malformed, the user is asked for
   a well-formed amount instead of a misread value
@@ -150,10 +158,15 @@ claim, no approval/execution audits, no execution attempts, no hashes.
 
 ## Deferred (M10 / M11 / M12+)
 
-- natural-language batch/distribute (M10) — currently multi-recipient
-  phrases clarify and `split`/`distribute`/`batch` prefixes are not verbs.
-  `batch pay blossom 0.01 USDC` is flagged in the corpus as a known hazard
-  that M10 must block explicitly.
+- natural-language batch/distribute is **SHIPPED in M10** for the explicit
+  v1 grammar only: uniform "each" batches, exact split totals, and explicit
+  per-recipient amounts, with 2–10 fully-resolved recipients, persisted as
+  one `pending_approval` payout + N items (see
+  `docs/m10-natural-language-batch-design.md`). Still deferred: CSV upload,
+  "pay everyone"/"pay all contributors"/group or role recipients, unresolved
+  group payouts, claim-link batches, private/DM batches, Judge Mode batches,
+  and auto-approval/direct execution — all remain declined or clarified with
+  zero artifacts.
 - conversational status questions ("what happened to …", "is this payment
   approved yet …") — currently declined; a later slice can map them to
   `inspect_payment_status`.
@@ -191,9 +204,14 @@ safely; role/group/ambiguous language never silently becomes a payment
 request; no execution, approval, hash, or proof claim ever originates from
 the agent.
 
-**Did not implement:** natural-language batch/distribute, CSV upload,
-conversational memory and status, arbitrary verbs, auto-approval, Judge Mode
-via NL, fuzz-tolerant typo recovery, or any new model-provider behavior.
+**Did not implement:** natural-language batch/distribute was deferred during
+M9 but is now SHIPPED in M10 for the explicit supported grammar only (uniform
+"each", exact splits, explicit per-recipient amounts — see
+`docs/m10-natural-language-batch-design.md`). Still not implemented: CSV
+upload, group/role recipients ("pay everyone"/"pay all contributors"),
+claim-link batches, conversational memory and status, arbitrary verbs,
+auto-approval, Judge Mode via NL, fuzz-tolerant typo recovery, or any new
+model-provider behavior.
 
 ## Readiness note
 
