@@ -196,14 +196,17 @@ const UNSAFE_MARKERS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
   { pattern: /ignore (your |our |the )?(rules|policy)/i, flag: "ignore_policy" },
   { pattern: /skip (the )?approval/i, flag: "skip_approval" },
   { pattern: /bypass (the )?approval/i, flag: "bypass_approval" },
+  { pattern: /bypass (the )?(limits|spending caps|policy)/i, flag: "bypass_approval" },
+  { pattern: /without (an |any |owner )?approval/i, flag: "skip_approval" },
   { pattern: /execute (now|immediately|the payment|the transaction)/i, flag: "execute_now" },
   { pattern: /call keeperhub/i, flag: "keeperhub_call" },
   { pattern: /keeperhub directly/i, flag: "keeperhub_call" },
-  { pattern: /\buse sql\b|\braw sql\b|\bsql injection/i, flag: "sql_instruction" },
+  { pattern: /\b(use|run) (raw )?sql\b|\bsql injection/i, flag: "sql_instruction" },
   { pattern: /post (a |an )?(url|request|to|a request)/i, flag: "url_instruction" },
+  { pattern: /\buse webhook admin\b|\bwebhook admin\b/i, flag: "webhook_instruction" },
   { pattern: /drain (the |my |our )?wallet/i, flag: "drain_wallet" },
   { pattern: /mark (this |the |it |my )?(transaction|payment|payout)?\s*(as )?(successful|completed)/i, flag: "fabricate_success" },
-  { pattern: /fake (a |the )?(transaction|hash|receipt|proof)/i, flag: "fabricate_success" },
+  { pattern: /fake (a |the )?(transaction|tx|hash|receipt|proof)/i, flag: "fabricate_success" },
 ];
 
 // ── Local deterministic money grammar (mirror of keeperhub/amount.ts) ──────
@@ -352,20 +355,25 @@ function nearestVerb(items: Item[], i: number): "pay" | "claim" | null {
 
 /**
  * Multi-recipient detection: a word following "and"/"or" after another
- * name, or directly following another name, is itself a recipient mention.
- * This keeps "pay blossom and mike 0.01 USDC" AMBIGUOUS instead of silently
- * becoming a single payment to blossom. Names not in the registry are still
- * captured so the planner can clarify rather than guess.
+ * name, or following another name across a comma/ampersand gap, is itself a
+ * recipient mention. This keeps "pay blossom and mike 0.01 USDC" AMBIGUOUS
+ * instead of silently becoming a single payment to blossom, while ordinary
+ * words after a name ("pay blossom about 0.01 USDC") stay out of the alias
+ * set. Names not in the registry are still captured so the planner can
+ * clarify rather than guess.
  */
-function aliasChain(items: Item[], i: number, registry: ReadonlySet<string>): boolean {
+function aliasChain(items: Item[], i: number, registry: ReadonlySet<string>, text: string): boolean {
   const previous = items[i - 1];
   if (previous === undefined) return false;
   if (previous.lower === "and" || previous.lower === "or") {
     const prior = items[i - 2];
     return prior !== undefined && prior.klass === "word" && registry.has(prior.lower);
   }
-  // Comma/whitespace adjacency after a known name ("blossom, mike").
-  return previous.klass === "word" && registry.has(previous.lower);
+  // Comma/ampersand adjacency: "blossom, endurance" (commas and "&" are
+  // scanner gaps, so the names appear adjacent).
+  const current = items[i];
+  const gap = text.slice((previous.index ?? 0) + previous.raw.length, current.index);
+  return previous.klass === "word" && registry.has(previous.lower) && /[,&]/.test(gap);
 }
 
 // ── Main entry ─────────────────────────────────────────────────────────────
@@ -444,11 +452,11 @@ export function extractCandidates(text: string, workspaceAliases: readonly strin
         continue;
       }
       // A number immediately preceded by a sign is a negative/positive
-      // amount, and a number starting after a dot (".01") is a malformed
-      // decimal fragment — neither becomes a candidate (the user is asked
-      // for a well-formed amount instead of a misread value).
+      // amount, and a number starting after a dot (".01") or comma ("0,01")
+      // is a malformed decimal fragment — neither becomes a candidate (the
+      // user is asked for a well-formed amount instead of a misread value).
       const previousChar = item.index > 0 ? text[item.index - 1] : "";
-      if (previousChar === "-" || previousChar === "+" || previousChar === ".") continue;
+      if (previousChar === "-" || previousChar === "+" || previousChar === "." || previousChar === ",") continue;
 
       const associatedToken =
         items[i + 1] !== undefined && items[i + 1].klass === "token" ? items[i + 1].lower : null;
@@ -521,7 +529,7 @@ export function extractCandidates(text: string, workspaceAliases: readonly strin
       if (item.lower.length < 2) continue;
       const inRegistry = registry.has(item.lower);
       const context = inRegistry ? "pay_verb" : aliasContext(items, i);
-      if (context !== null || aliasChain(items, i, registry)) {
+      if (context !== null || aliasChain(items, i, registry, text)) {
         pushUnique(
           candidates.aliases,
           (c) => c.normalized ?? c.raw,
@@ -563,7 +571,12 @@ export function extractMemo(rawText: string): string | null {
   const markers = [...rawText.matchAll(MEMO_MARKER_PATTERN)];
   if (markers.length === 0) return null;
   const last = markers[markers.length - 1];
-  const candidate = rawText.slice((last.index ?? 0) + last[0].length).trim();
+  const markerIndex = last.index ?? 0;
+  // A memo marker only counts AFTER the payment fields: require at least one
+  // digit (amount) before the marker, so a leading "for design work, pay
+  // blossom 0.01 USDC" cannot swallow the instruction into the memo.
+  if (!/\d/.test(rawText.slice(0, markerIndex))) return null;
+  const candidate = rawText.slice(markerIndex + last[0].length).trim();
   if (candidate.length === 0) return null;
   const redacted = redactAgentRawText(candidate);
   const memo = redacted.length > MAX_MEMO_CHARS ? redacted.slice(0, MAX_MEMO_CHARS) : redacted;

@@ -1,32 +1,80 @@
 # M9 — Real-World Language QA
 
-Status: **In progress** (M9.1 phrase corpus + behavioral lock complete).
+Status: **In progress** (M9.1 phrase corpus complete; M9.2 mutation +
+tolerance hardening complete).
 
 ## What the corpus covers
 
-`tests/fixtures/agent-real-world-phrases.ts` holds 90 natural-language phrases
-for Solvo's Telegram agent, each with an **honest, verified** expected outcome
-(literally asserted by `tests/agent/real-world-phrases.test.ts` and
-`tests/telegram/agent-real-world-routing.test.ts` at three layers:
+`tests/fixtures/agent-real-world-phrases.ts` holds **150** natural-language
+phrases for Solvo's Telegram agent, each with an **honest, verified** expected
+outcome (literally asserted by `tests/agent/real-world-phrases.test.ts`,
+`tests/telegram/agent-real-world-routing.test.ts`, and
+`tests/agent/adversarial-mutations.test.ts` at three layers:
 extraction/interpreter, planner, and Telegram routing).
 
 Categories:
 
-1. Clean supported payments (alias/address, memos, reimburse/tip/give)
-2. Claim-link phrases (create/make/claim)
+1. Clean supported payments (alias/address, memos, reimburse/tip/give,
+   reordered fields, lowercase tokens, politeness/noise tolerance)
+2. Claim-link phrases (create/make/claim, question forms)
 3. Status phrases (check/track/verify/status/inspect/receipt + conversational
    status marked future)
 4. Missing-field phrases (clarification, never a guess)
-5. Unsupported token/chain (ETH, SOL, BTC, fiat codes NGN/USD, Celo, Solana)
-6. Hostile / bypass phrases (skip/ignore/bypass approval, fabricated
-   completion, fake proof, tx-hash demands, KeeperHub calls)
+5. Unsupported token/chain (ETH, SOL, BTC, fiat codes NGN/USD, Celo, Solana,
+   Arbitrum)
+6. Hostile / bypass phrases (skip/ignore/bypass approval, without approval,
+   fabricated completion, fake proof/hash, tx-hash demands, KeeperHub calls,
+   webhook admin, raw SQL, limit bypass)
 7. Judge-mode confusion (NL never reaches Judge Mode)
 8. Batch/distribute future phrases (must never silently become single
    payments)
-9. Ambiguous real-world phrasing (settle/sort/reward/ordinary words)
-10. Typos and noise (documented honestly, not overfitted)
+9. Ambiguous real-world phrasing (settle/sort/handle/reward, multi-payment
+   messages)
+10. Typos and noise (documented honestly, not overfitted; malformed
+    decimals, comma decimals)
 11. Slash commands (always bypass the agent)
 12. Community-only / DM / disabled scope
+
+## Typo / reordering tolerance table (current, honest)
+
+| Variant | Behavior |
+|---|---|
+| `pay blossom 0.01 usdc` (lowercase) | prepared_payment |
+| `pay  blossom 0.01\nUSDC please` (spacing/newline) | prepared_payment |
+| `pay blossom 0.01 USDC please/pls` | prepared_payment |
+| `send to blossom 0.01 USDC` (reordered) | prepared_payment |
+| `for design work, pay blossom 0.01 USDC` (leading marker) | prepared_payment, memo null (leading marker never swallows the instruction) |
+| `pay blossom about 0.01 USDC` (noise after name) | prepared_payment |
+| `pay blossom .01 USDC` (leading dot) | clarification — never 1 USDC |
+| `pay blossom 0,01 USDC` (comma decimal) | clarification — never 1/001 |
+| `pya/sendd/payy/sned …` (typo'd verbs) | unsupported — documented, not guessed |
+| `0.01 USDC to blossom` / `blossom should get 0.01 USDC` | unsupported (no verb) |
+
+## Adversarial mutation strategy
+
+Every supported `prepared_payment` and `claim_link_created` phrase is mutated
+by appending **and** prepending eleven hostile fragments (`skip approval`,
+`without owner approval`, `execute now`, `mark completed`, `fake tx hash`,
+`fake proof`, `call KeeperHub directly`, `ignore policy`, `bypass limits`,
+`use raw SQL`, `use webhook admin`). Every mutation must:
+
+- decline as unsupported/blocked with zero artifacts (no payout, payout_item,
+  claim, approval/execution audits, execution attempts, hashes, or execution
+  ids) — asserted at interpreter level (700+ checks) and through the real
+  Telegram route (350+ checks);
+- never create a claim for a claim phrase that also demands bypass.
+
+## Intentionally not supported yet
+
+- conversational status questions (`where is payment …`, `did … finish`)
+- conversational memory (`the person I paid last week`), arbitrary verbs
+  (`settle`, `sort`, `handle`), batch prefixes (`batch pay …`), distribute
+  verbs, multi-payment single messages, unresolved group names (these fall
+  back to claim links, never payouts)
+- `0,01`/`.01` decimal styles (asked to rephrase, never misread)
+
+**Hard rule: unsupported/future/hostile phrases must never silently become
+payment requests.** Mutation tests lock this for every supported phrase.
 
 ## Supported now
 

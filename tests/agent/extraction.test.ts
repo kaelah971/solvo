@@ -308,7 +308,7 @@ describe("agent memo extraction", () => {
   });
 
   it("truncates long memos deterministically to 140 characters", () => {
-    const long = "for " + "a".repeat(200);
+    const long = "pay blossom 0.01 USDC for " + "a".repeat(200);
     const memo = extractMemo(long);
     assert.ok(memo !== null);
     assert.equal(memo.length, 140);
