@@ -1,0 +1,9 @@
+export const DEV_WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
+export const M1_RECIPIENT = "0x76d7a718ccdc1c132c52d4c05ea0c2fa8e657486";
+export const M1_AMOUNT_BASE_UNITS = 10000n;
+export const M1_EXECUTION_ID = "jivl3joxkavd1crhf3ec3";
+export const M1_TRANSACTION_HASH = "0x7de8f6d09c38698c6c2a016a14265aa703723b54e1f61286f4c492cfef316089";
+export const M1_EXPLORER_URL =
+  "https://basescan.org/tx/0x7de8f6d09c38698c6c2a016a14265aa703723b54e1f61286f4c492cfef316089";
+
+export const M1_SENDER_WALLET = "0x3A77CbC62e8dAdbAF6ff29Bd082dc3f71b1c150E";

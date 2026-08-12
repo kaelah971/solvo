@@ -1,0 +1,14 @@
+-- M5.1 — audit event timestamps must be statement-accurate.
+--
+-- now() is transaction-scoped (transaction_timestamp): every event appended
+-- inside one transaction receives the SAME created_at. On the synchronous
+-- KeeperHub completion path, execution_submitted and execution_completed are
+-- appended in one transaction (both rows get the transaction start time), so
+-- their relative order was previously decided by a random-UUID id tiebreaker
+-- and could surface as completed-before-submitted.
+--
+-- clock_timestamp() is evaluated per statement, making each audit event's
+-- created_at truthful even inside a multi-statement transaction:
+--
+--   simulation_started < simulation_passed < execution_submitted < execution_completed
+ALTER TABLE audit_events ALTER COLUMN created_at SET DEFAULT clock_timestamp();

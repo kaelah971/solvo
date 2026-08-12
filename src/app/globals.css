@@ -1,26 +1,282 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-void: #17191c;
+  --color-vignette: #17191c;
+  --color-surface: #232323;
+  --color-surface-top: rgba(255, 255, 255, 0.03);
+  --color-primary: #ededed;
+  --color-secondary: #b8b8b8;
+  --color-muted: #8c8c8c;
+  --color-faint: #6e6e6e;
+  --color-ghost: rgba(237, 237, 237, 0.05);
+  --color-charcoal: #5f6266;
+  --color-wordmark: #9a9ca0;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-lamp-glow: #ffffff;
+  --color-lamp-shade: #1a1a1a;
+  --color-lamp-cable: #2e2e2e;
+  --color-state-complete: #c8c8c8;
+  --color-state-pending: #999999;
+  --color-state-error: #d6d6d6;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-void: var(--color-void);
+  --color-vignette: var(--color-vignette);
+  --color-surface: var(--color-surface);
+  --color-surface-top: var(--color-surface-top);
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-muted: var(--color-muted);
+  --color-faint: var(--color-faint);
+  --color-ghost: var(--color-ghost);
+  --color-charcoal: var(--color-charcoal);
+  --color-wordmark: var(--color-wordmark);
+  --color-line: var(--color-line);
+  --color-border: var(--color-border);
+  --color-lamp-glow: var(--color-lamp-glow);
+  --color-lamp-shade: var(--color-lamp-shade);
+  --color-lamp-cable: var(--color-lamp-cable);
+  --color-state-complete: var(--color-state-complete);
+  --color-state-pending: var(--color-state-pending);
+  --color-state-error: var(--color-state-error);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  --font-display: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  --font-data: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+    monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: var(--color-void);
+  color: var(--color-primary);
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(237, 237, 237, 0.18);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 1px solid rgba(237, 237, 237, 0.7);
+  outline-offset: 3px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+html {
+  background-color: var(--color-void);
+}
+
+.site-substrate {
+  min-height: 100vh;
+  background-color: var(--color-void);
+  background-image: radial-gradient(
+    ellipse 82vw 58vh at 50% 28vh,
+    #2b2e32 0%,
+    #202327 48%,
+    var(--color-void) 65%
+  );
+}
+
+.site-inner {
+  width: min(calc(100% - 48px), 1180px);
+  margin-inline: auto;
+}
+
+.hero-arrow {
+  position: absolute;
+  top: 50%;
+  color: var(--color-faint);
+  font-size: 14px;
+}
+
+.hero-stage {
+  min-height: 340px;
+}
+
+.hero-lamp {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 3;
+  width: clamp(270px, 24vw, 360px);
+  height: auto;
+  max-width: none;
+  transform: translateX(-50%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.hero-word-stack {
+  position: absolute;
+  top: clamp(166px, 21vh, 228px);
+  left: 50%;
+  z-index: 2;
+  width: min(100%, 760px);
+  transform: translateX(-50%);
+}
+
+/* Oversized ghosted wordmark texture and its glyph-clipped living light. */
+.ghost-wordmark {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  color: var(--color-charcoal);
+  user-select: none;
+  pointer-events: none;
+}
+
+.ghost-wordmark-base {
+  position: relative;
+  z-index: 1;
+}
+
+.ghost-wordmark-sweep {
+  z-index: 2;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    transparent 46%,
+    rgba(154, 156, 160, 0.18) 48%,
+    rgba(154, 156, 160, 0.72) 50%,
+    rgba(154, 156, 160, 0.18) 52%,
+    transparent 54%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0;
+  transform: translateX(-115%);
+  animation: ghost-wordmark-sweep 8s linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Hairline separators. */
+.hairline-top {
+  border-top: 1px solid var(--color-line);
+}
+.hairline-bottom {
+  border-bottom: 1px solid var(--color-line);
+}
+.hairline-left {
+  border-left: 1px solid var(--color-line);
+}
+.hairline-right {
+  border-right: 1px solid var(--color-line);
+}
+
+/* Long hashes and addresses: wrap safely, stay copyable. */
+.data-break {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.hero-enter {
+  animation: hero-enter 600ms ease-out both;
+}
+
+.hero-enter-delayed {
+  animation: hero-enter 600ms 200ms ease-out both;
+}
+
+.lamp-breathe {
+  opacity: 0.82;
+  animation: lamp-breathe 4s ease-in-out infinite;
+}
+
+@keyframes hero-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lamp-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+@keyframes ghost-wordmark-sweep {
+  0% {
+    transform: translateX(-115%);
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 0.72;
+  }
+  100% {
+    transform: translateX(115%);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .site-inner {
+    width: min(calc(100% - 32px), 1180px);
+  }
+
+  .hero-stage {
+    min-height: 360px;
+  }
+
+  .hero-lamp {
+    width: 250px;
+  }
+
+  .hero-word-stack {
+    top: 174px;
+  }
+}
+
+@media (max-height: 500px) and (min-width: 640px) {
+  .hero-stage {
+    min-height: 230px;
+  }
+
+  .hero-lamp {
+    width: 168px;
+  }
+
+  .hero-word-stack {
+    top: 108px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter,
+  .hero-enter-delayed,
+  .lamp-breathe,
+  .ghost-wordmark-sweep {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
