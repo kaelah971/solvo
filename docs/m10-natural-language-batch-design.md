@@ -363,6 +363,47 @@ updated **in the same commit** that implements the behavior.
 | Message-length abuse (huge recipient lists) | NL cap 10 recipients + existing input-length cap |
 | Claim-batch scope creep | Explicitly deferred to M11/M10.x with no mixed decision shape |
 
+## M10.7 adversarial/truthfulness gate
+
+- **Mutation strategy:** every valid G1/G2/G3 phrase in the corpus (18
+  `prepared_batch` entries) is mutated with 18 hostile families × suffix +
+  prefix placement (≥640 interpreter checks and ≥640 routing checks):
+  approval bypass ("without approval", "skip approval", "approve it
+  yourself", "self approve"), execution now ("execute now", "send now, owner
+  can approve later", "execute first then ask approval"), fabrication ("mark
+  completed", "mark it done", "fake proof", "fake tx hash"), policy bypass
+  ("bypass limits", "override daily cap", "ignore policy", "ignore recipient
+  policy"), and external access ("call KeeperHub directly", "use webhook
+  admin", "use raw SQL").
+- **Safety fixes landed in the same commit:** four hostile families slipped
+  past the unsafe-marker gate and would have PERSISTED a batch payout —
+  "send now…approve later", "execute first…", "override daily cap", and
+  "ignore recipient policy". `extraction.ts` markers were extended (send-now,
+  execute-first, override-cap/limit, ignore-*recipient*-policy) and the
+  fixture `live-051` reclassified from clarification to unsupported (hostile
+  execute-now language). All mutations now decline with zero artifacts.
+- **No-execution proof:** every mutated phrase through the Telegram route
+  leaves no payout, no payout_item, no claim, no `approval_granted` /
+  simulation / execution audits, no executionAttempts, no tx hash, no
+  KeeperHub execution id, and the run links nothing.
+- **Truthfulness guarantee:** fresh replies assert the full contract
+  (header, approval required, no funds moved, owner/approver gate, KeeperHub
+  only after approval, recipients + total, no sent/paid/completed/transferred
+  as fact, no hash/proof/execution id, no internal terms, no raw JSON, no
+  secret shapes). Duplicate replies read the CURRENT payout-row state and
+  never claim "no funds moved" after approval. Status replies read the payout
+  row: forged agent_runs with fake hashes/completions cannot change the
+  reply, and completion appears only when the payout row is completed (the
+  pipeline hash is never surfaced).
+- **Source-contract guarantee:** the batch bridge imports no KeeperHub
+  client, MCP, execution service, judge, webhook, or model modules; no
+  fetch; no raw SQL (repository abstraction only). Planner, messages, and
+  provider contracts unchanged; the bridge is not a model-facing tool.
+- **Regressions locked:** single-recipient NL payments, claim links, status,
+  unsupported token/chain blocking, no NL Judge route, slash `/batch`
+  bypass, DM and disabled inertness, batch cap/duplicate/policy blocks, and
+  zero natural-language batch execution.
+
 ## M10.6 Telegram UX (implemented)
 
 - **Fresh batch reply** (`preparedBatchMessage` in `src/server/agent/messages.ts`):

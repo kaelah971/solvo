@@ -223,12 +223,14 @@ const GROUP_WORDS = new Set([
 ]);
 
 const UNSAFE_MARKERS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
-  { pattern: /ignore (your |our |the )?(rules|policy)/i, flag: "ignore_policy" },
+  { pattern: /ignore (any |our |the |your |recipient )?(rules|policy)/i, flag: "ignore_policy" },
   { pattern: /skip (the )?approval/i, flag: "skip_approval" },
   { pattern: /bypass (the )?approval/i, flag: "bypass_approval" },
   { pattern: /bypass (the )?(limits|spending caps|policy)/i, flag: "bypass_approval" },
+  { pattern: /override (the )?(daily |spending )?(cap|caps|limit|limits)|override (the )?(policy|approval)/i, flag: "bypass_approval" },
   { pattern: /without (an |any |owner )?approval/i, flag: "skip_approval" },
-  { pattern: /execute (now|immediately|the payment|the transaction)/i, flag: "execute_now" },
+  { pattern: /execute (now|immediately|first|the payment|the transaction)/i, flag: "execute_now" },
+  { pattern: /send (now|immediately|right now)/i, flag: "execute_now" },
   { pattern: /call keeperhub/i, flag: "keeperhub_call" },
   { pattern: /keeperhub directly/i, flag: "keeperhub_call" },
   { pattern: /\b(use|run) (raw )?sql\b|\bsql injection/i, flag: "sql_instruction" },
