@@ -1,7 +1,10 @@
 # M8 — Agentic Payment Orchestrator: S2 Real Model Provider
 
 Status: **SHIPPED** (S2.1 provider adapter → S2.2 factory/config → S2.3 hostile
-E2E hardening → S2.4 failure UX contract).
+E2E hardening → S2.4 failure UX contract → S2.5 finalization gate). The
+implementation decision record lives in the M8 design doc
+(`docs/superpowers/specs/2026-08-12-m8-agentic-payment-orchestrator-design.md`,
+"Provider choice (implementation)").
 
 ## What S2 shipped
 

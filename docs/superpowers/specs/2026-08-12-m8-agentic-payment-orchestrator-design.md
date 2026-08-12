@@ -196,6 +196,38 @@ Rules:
   degrades to today's deterministic regex behavior — the model layer is
   simply never invoked.
 
+## Provider choice (implementation)
+
+Implemented in S2 (`src/server/agent/openai-compatible-interpreter.ts`,
+`src/server/agent/providers/factory.ts`; see `docs/m8-s2-provider.md`):
+
+- **Chosen approach:** raw fetch-based OpenAI-compatible Responses API
+  adapter using JSON Schema structured output
+  (`text.format: { type: "json_schema", strict: true }`). No AI SDK
+  dependency; the adapter is the only file that knows the wire format.
+- **Not chosen:** Vercel AI SDK, Anthropic SDK, or a generic tool-calling
+  framework for S2.
+- **Reasons:**
+  - minimal dependency surface (one adapter file, injected `fetch`);
+  - easy mocking — every test runs against a stub fetch, never the network;
+  - explicit timeout control (`AbortSignal.timeout` + hard timer race);
+  - no accidental tool exposure — the request carries a bounded JSON schema
+    and two prompts, never a tool registry;
+  - direct local validation of model output with the deterministic
+    `validateAgentInterpretation` (the provider schema is advisory only);
+  - keeps KeeperHub/execution tools out of model context by construction.
+- **Safety:**
+  - the provider is optional and default-off (`SOLVO_AGENT_PROVIDER=static`);
+  - the static provider remains the fallback/default with no key required;
+  - the model classifies intent only; Solvo validates output locally and
+    makes all decisions deterministically;
+  - the model cannot approve, execute, call KeeperHub, or fake proof;
+  - failed provider calls move no funds (failure UX contract, S2.4).
+- **Future:** any other provider (Anthropic, local models, etc.) can
+  implement the unchanged `IntentInterpreter` interface later, preserving
+  the same contract: sanitized input in, locally revalidated
+  `AgentInterpretation` out, fail closed on everything else.
+
 ## 5. Tool Registry
 
 All tools are registered application functions with typed inputs/outputs.
