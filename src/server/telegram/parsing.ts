@@ -214,6 +214,22 @@ export function parseInstruction(text: string, options: { botUsername?: string |
     };
   }
 
+  const claimPay = new RegExp(`^\\/claimpay\\s+${AMOUNT}\\s+${TOKEN}\\s*$`, "i").exec(subject);
+  if (claimPay) {
+    return {
+      kind: "claim_pay",
+      amount: claimPay[1],
+      token: "USDC",
+    };
+  }
+  if (/^\/claimpay\s*$/.test(subject) || /^\/claimpay\s+/.test(subject)) {
+    return {
+      kind: "failure",
+      reason: "Invalid claim command.",
+      hint: "Use /claimpay <amount> USDC, for example: /claimpay 0.05 USDC. Base USDC only.",
+    };
+  }
+
   const batchMatch = /^\/batch\s*\n([\s\S]*)$/.exec(subject);
   if (batchMatch) {
     if (batchMatch[1].trim().length === 0) {

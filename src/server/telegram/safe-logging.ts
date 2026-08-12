@@ -12,6 +12,11 @@ const TELEGRAM_TOKEN_PATTERN = /\b\d{8,10}:[A-Za-z0-9_-]{35}\b/g;
 const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9._\-]+/gi;
 const DATABASE_URL_PATTERN = /(postgres(?:ql)?:\/\/)[^\s"'`]+/gi;
 const KEEPERHUB_KEY_PATTERN = /\bkh_[A-Za-z0-9_-]{8,}\b/g;
+// One-time claim links: the raw 192-bit token is single-use and must never
+// reach persistent logs or telemetry. A claim URL is only ever shown
+// intentionally to its requester at creation time. Matches "claim/<token>"
+// with or without a leading slash (URLs, JSON payloads, bare references).
+const CLAIM_URL_PATTERN = /\bclaim\/[A-Za-z0-9_-]{32}\b/g;
 
 function configuredSecrets(): string[] {
   const secrets: string[] = [];
@@ -39,6 +44,7 @@ export function redactSecrets(text: string): string {
   out = out.replace(BEARER_PATTERN, "Bearer [REDACTED]");
   out = out.replace(DATABASE_URL_PATTERN, "$1[REDACTED]");
   out = out.replace(KEEPERHUB_KEY_PATTERN, "kh_[REDACTED]");
+out = out.replace(CLAIM_URL_PATTERN, "[REDACTED:CLAIM_TOKEN]");
   return out;
 }
 
@@ -46,6 +52,7 @@ export type SafeErrorContext = {
   updateId?: number | null;
   action?: string | null;
   payoutId?: string | null;
+  claimId?: string | null;
 };
 
 function extractField(value: unknown, key: string): unknown {

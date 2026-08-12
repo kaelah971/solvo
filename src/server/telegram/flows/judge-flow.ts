@@ -185,6 +185,21 @@ export async function handleJudgePayInstruction(
   const recipient = normalizeAddress(instruction.address);
 
   const persisted = await deps.repo.transaction(async (tx) => {
+    // Serialize identical deliveries and per-workspace capacity accounting so
+    // concurrent judge payments cannot overshoot the daily/lifetime/per-user
+    // caps and duplicate deliveries never create a second intent.
+    await tx.lockIdempotencyKey(idempotencyKey);
+    await tx.lockWorkspaceForUpdate(workspace.id);
+    const raced = await tx.getPayoutItemByIdempotencyKey(idempotencyKey);
+    if (raced) {
+      const loaded = await tx.getPayoutItemForExecution(raced.id);
+      return {
+        duplicate: true,
+        payoutId: raced.payout_id,
+        itemId: raced.id,
+        state: loaded?.item.status ?? "unknown",
+      };
+    }
     // Re-check every cap inside the same transaction that persists the payout
     // so concurrent judge payments cannot overshoot daily/lifetime or per-user
     // caps.
@@ -233,7 +248,7 @@ export async function handleJudgePayInstruction(
       chainId: workspace.chain_id,
       tokenAddress: workspace.token_address,
     });
-    const { item } = await tx.createPayoutItem({
+    const { item, created } = await tx.createPayoutItem({
       payoutId: payout.id,
       recipientAddress: recipient,
       amountBaseUnits,
@@ -241,6 +256,15 @@ export async function handleJudgePayInstruction(
       status: "approved",
       idempotencyKey,
     });
+    if (!created) {
+      const loaded = await tx.getPayoutItemForExecution(item.id);
+      return {
+        duplicate: true,
+        payoutId: item.payout_id,
+        itemId: item.id,
+        state: loaded?.item.status ?? "unknown",
+      };
+    }
     await tx.appendAuditEvent({
       workspaceId: workspace.id,
       payoutId: payout.id,
@@ -268,6 +292,16 @@ export async function handleJudgePayInstruction(
     });
     return { blocked: false, reason: null, payoutId: payout.id, itemId: item.id };
   });
+
+  if (persisted.duplicate) {
+    return {
+      messages: [],
+      final: judgeDuplicateMessage(persisted.state ?? "unknown", persisted.payoutId ?? ""),
+      outcome: "duplicate",
+      payoutId: persisted.payoutId,
+      itemId: persisted.itemId,
+    };
+  }
 
   if (persisted.blocked) {
     return {

@@ -79,6 +79,7 @@ describeDb("database integration", () => {
   after(async () => {
     if (!cleanupSql) return;
     try {
+      await cleanupSql`DELETE FROM claim_links WHERE workspace_id = ${workspaceId}`;
       await cleanupSql`DELETE FROM audit_events WHERE workspace_id = ${workspaceId}`;
       await cleanupSql`
         DELETE FROM execution_attempts
@@ -285,5 +286,51 @@ describeDb("database integration", () => {
     assert.ok(reread);
     assert.equal(reread.approved_at, approved.approved_at);
     assert.equal(reread.completed_at, completed.completed_at);
+  });
+
+  it("persists claim links, enforces single-claim and token-hash uniqueness (M7)", async () => {
+    const repo = new PostgresRepository(cleanupSql);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const tokenHash = `hash-${randomUUID().replace(/-/g, "")}`;
+
+    const claim = await repo.createClaimLink({
+      workspaceId,
+      requesterId: "123456789",
+      amountBaseUnits: "10000",
+      currencySymbol: "USDC",
+      chainId: CHAIN_ID,
+      tokenAddress: TOKEN,
+      tokenHash,
+      tokenPrefix: "abc12345",
+      expiresAt,
+      idempotencyKey: `db-claim-${randomUUID()}`,
+    });
+    assert.equal(claim.status, "created");
+
+    const byHash = await repo.getClaimLinkByTokenHash(tokenHash);
+    assert.equal(byHash?.id, claim.id);
+    const byKey = await repo.getClaimLinkByIdempotencyKey(claim.idempotency_key);
+    assert.equal(byKey?.id, claim.id);
+
+    // Single-claim guarantee: first claim wins.
+    const claimed = await repo.claimClaimLink({
+      claimId: claim.id,
+      recipientAddress: RECIPIENT,
+      claimedBy: "web",
+      nowIso: new Date().toISOString(),
+    });
+    assert.ok(claimed);
+    assert.equal(claimed.status, "claimed");
+    const second = await repo.claimClaimLink({
+      claimId: claim.id,
+      recipientAddress: "0x742d35cc6634c0532925a3b844bc454e4438f44e",
+      claimedBy: "web",
+      nowIso: new Date().toISOString(),
+    });
+    assert.equal(second, null, "second claim attempt must not mutate the recipient");
+
+    const strict = await repo.transitionClaimStatus(claim.id, ["claimed"], "approved");
+    assert.equal(strict.status, "approved");
+    await assert.rejects(repo.transitionClaimStatus(claim.id, ["created"], "cancelled"));
   });
 });

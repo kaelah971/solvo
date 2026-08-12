@@ -590,7 +590,13 @@ export class ExecutionService {
     error: unknown,
   ): Promise<ExecutionOutcome> {
     const message = errorMessage(error);
-    const ambiguous = /transport|timeout|fetch|aborted|unknown/i.test(message);
+    // A malformed/unparseable response is as ambiguous as a transport failure:
+    // the transfer may or may not have happened, so it must never be recorded
+    // as a definite rejection (or success).
+    const ambiguous =
+      /transport|timeout|fetch|aborted|unknown|malformed|unexpected token|parse|syntaxerror|invalid (response|json)|json parse/i.test(
+        message,
+      );
     await this.repo.transaction(async (tx) => {
       await tx.updateExecutionAttempt(attemptId, {
         status: ambiguous ? "unknown" : "failed",

@@ -160,6 +160,10 @@ export async function applyApprovalCallback(
   if (action === "approve") {
     try {
       await deps.repo.transaction(async (tx) => {
+        // Serialize capacity accounting per workspace: two concurrent approvals
+        // of DIFFERENT payouts cannot both read the same daily-spend sum and
+        // jointly overspend the daily cap.
+        await tx.lockWorkspaceForUpdate(workspace.id);
         const dailySpend = await tx.sumPayoutItemsByWorkspaceStates(
           workspace.id,
           DAILY_SPEND_STATES,

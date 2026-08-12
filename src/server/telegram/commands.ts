@@ -27,6 +27,7 @@ export const SOLVO_COMMANDS: readonly SolvoCommand[] = [
   { name: "member", description: "Manage workspace members", scope: "community" },
   { name: "recipient", description: "Manage saved recipients", scope: "community" },
   { name: "batch", description: "Create a batch payout", scope: "community" },
+  { name: "claimpay", description: "Create a one-time claim link", scope: "community" },
 ];
 
 export const COMMAND_NAME_PATTERN = /^[a-z0-9_]{1,32}$/;

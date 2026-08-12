@@ -17,16 +17,19 @@ import type {
   SolvoRepository,
   UpdateExecutionAttemptInput,
 } from "./repository.ts";
-import type {
-  AuditEventRow,
-  ExecutionAttemptRow,
-  MemberRole,
-  PayoutItemRow,
-  PayoutRow,
-  PayoutWithRelations,
-  RecipientRow,
-  WorkspaceMemberRow,
-  WorkspaceRow,
+import {
+  canClaimTransition,
+  type AuditEventRow,
+  type ClaimLinkRow,
+  type ClaimStatus,
+  type ExecutionAttemptRow,
+  type MemberRole,
+  type PayoutItemRow,
+  type PayoutRow,
+  type PayoutWithRelations,
+  type RecipientRow,
+  type WorkspaceMemberRow,
+  type WorkspaceRow,
 } from "./types.ts";
 
 function nowIso(): string {
@@ -39,16 +42,62 @@ function nowIso(): string {
  * transitions. `transaction` runs the callback directly (single-threaded).
  */
 export class MemoryRepository implements SolvoRepository {
-  readonly workspaces = new Map<string, WorkspaceRow>();
-  readonly members = new Map<string, WorkspaceMemberRow>();
-  readonly recipients = new Map<string, RecipientRow>();
-  readonly payouts = new Map<string, PayoutRow>();
-  readonly payoutItems = new Map<string, PayoutItemRow>();
-  readonly executionAttempts = new Map<string, ExecutionAttemptRow>();
-  readonly auditEvents: AuditEventRow[] = [];
+  workspaces = new Map<string, WorkspaceRow>();
+  members = new Map<string, WorkspaceMemberRow>();
+  recipients = new Map<string, RecipientRow>();
+  payouts = new Map<string, PayoutRow>();
+  payoutItems = new Map<string, PayoutItemRow>();
+  executionAttempts = new Map<string, ExecutionAttemptRow>();
+  auditEvents: AuditEventRow[] = [];
+  claimLinks = new Map<string, ClaimLinkRow>();
+
+  /**
+   * Mirrors Postgres transaction semantics: transactions are serialized (like
+   * the workspace/idempotency locks in Postgres) and on failure every mutation
+   * made inside the callback is rolled back, so memory and Postgres
+   * repositories expose the same externally observable invariants (no orphan
+   * rows, no half-applied transitions, no clobbered concurrent commits).
+   */
+  private txTail: Promise<unknown> = Promise.resolve();
 
   async transaction<T>(fn: (repo: SolvoRepository) => Promise<T>): Promise<T> {
-    return fn(this);
+    const previous = this.txTail;
+    let release: () => void = () => {};
+    this.txTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    const workspaces = new Map(this.workspaces);
+    const members = new Map(this.members);
+    const recipients = new Map(this.recipients);
+    const payouts = new Map(this.payouts);
+    const payoutItems = new Map(this.payoutItems);
+    const executionAttempts = new Map(this.executionAttempts);
+    const auditEvents = [...this.auditEvents];
+    const claimLinks = new Map(this.claimLinks);
+    try {
+      return await fn(this);
+    } catch (error) {
+      this.workspaces = workspaces;
+      this.members = members;
+      this.recipients = recipients;
+      this.payouts = payouts;
+      this.payoutItems = payoutItems;
+      this.executionAttempts = executionAttempts;
+      this.auditEvents = auditEvents;
+      this.claimLinks = claimLinks;
+      throw error;
+    } finally {
+      release();
+    }
+  }
+
+  async lockWorkspaceForUpdate(): Promise<void> {
+    // Single-threaded in-memory repository: no cross-transaction concurrency.
+  }
+
+  async lockIdempotencyKey(): Promise<void> {
+    // Single-threaded in-memory repository: no cross-transaction concurrency.
   }
 
   async createWorkspace(input: CreateWorkspaceInput): Promise<WorkspaceRow> {
@@ -465,5 +514,117 @@ export class MemoryRepository implements SolvoRepository {
     return latest.event_type === "approval_rejected"
       ? `REJECTED BY ${role}${actor}`
       : `APPROVED BY ${role}${actor}`;
+  }
+
+  // ── M7 claim links ─────────────────────────────────────────────────────
+
+  async createClaimLink(input: {
+    workspaceId: string;
+    requesterId: string;
+    amountBaseUnits: string;
+    currencySymbol: string;
+    chainId: string;
+    tokenAddress: string;
+    tokenHash: string;
+    tokenPrefix: string;
+    expiresAt: string;
+    idempotencyKey: string;
+  }): Promise<ClaimLinkRow> {
+    const row: ClaimLinkRow = {
+      id: randomUUID(),
+      workspace_id: input.workspaceId,
+      requester_id: input.requesterId,
+      amount_base_units: input.amountBaseUnits,
+      currency_symbol: input.currencySymbol,
+      chain_id: input.chainId,
+      token_address: input.tokenAddress,
+      token_hash: input.tokenHash,
+      token_prefix: input.tokenPrefix,
+      status: "created",
+      claimed_recipient: null,
+      claimed_by: null,
+      claimed_at: null,
+      expires_at: input.expiresAt,
+      payout_id: null,
+      idempotency_key: input.idempotencyKey,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    };
+    this.claimLinks.set(row.id, row);
+    return row;
+  }
+
+  async getClaimLinkByTokenHash(tokenHash: string): Promise<ClaimLinkRow | null> {
+    return [...this.claimLinks.values()].find((claim) => claim.token_hash === tokenHash) ?? null;
+  }
+
+  async getClaimLinkById(id: string): Promise<ClaimLinkRow | null> {
+    return this.claimLinks.get(id) ?? null;
+  }
+
+  async getClaimLinkByIdempotencyKey(idempotencyKey: string): Promise<ClaimLinkRow | null> {
+    return [...this.claimLinks.values()].find((claim) => claim.idempotency_key === idempotencyKey) ?? null;
+  }
+
+  async getClaimLinkByPayoutId(payoutId: string): Promise<ClaimLinkRow | null> {
+    return [...this.claimLinks.values()].find((claim) => claim.payout_id === payoutId) ?? null;
+  }
+
+  async listClaimsByWorkspace(workspaceId: string): Promise<ClaimLinkRow[]> {
+    return [...this.claimLinks.values()]
+      .filter((claim) => claim.workspace_id === workspaceId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+
+  async claimClaimLink(input: {
+    claimId: string;
+    recipientAddress: string;
+    claimedBy: string;
+    nowIso: string;
+  }): Promise<ClaimLinkRow | null> {
+    const row = this.claimLinks.get(input.claimId);
+    if (!row || row.status !== "created") return null;
+    if (row.expires_at <= input.nowIso) return null;
+    const updated: ClaimLinkRow = {
+      ...row,
+      status: "claimed",
+      claimed_recipient: input.recipientAddress,
+      claimed_by: input.claimedBy,
+      claimed_at: input.nowIso,
+      updated_at: nowIso(),
+    };
+    this.claimLinks.set(input.claimId, updated);
+    return updated;
+  }
+
+  async transitionClaimStatus(
+    id: string,
+    from: readonly ClaimStatus[],
+    to: ClaimStatus,
+  ): Promise<ClaimLinkRow> {
+    const row = this.claimLinks.get(id);
+    if (!row) throw new Error(`claim_links: record not found: ${id}`);
+    if (!from.includes(row.status)) {
+      throw new StateTransitionError(row.status as ExecutionState, to as ExecutionState);
+    }
+    if (!canClaimTransition(row.status, to)) {
+      throw new StateTransitionError(row.status as ExecutionState, to as ExecutionState);
+    }
+    const updated = { ...row, status: to, updated_at: nowIso() };
+    this.claimLinks.set(id, updated);
+    return updated;
+  }
+
+  async setClaimPayoutId(id: string, payoutId: string): Promise<ClaimLinkRow> {
+    const row = this.claimLinks.get(id);
+    if (!row) throw new Error(`claim_links: record not found: ${id}`);
+    if (row.status !== "approved" || row.payout_id !== null) {
+      throw new Error(
+        `claim_links: cannot attach payout to claim ${id}: status=${row.status}, payout_id=${row.payout_id ?? "null"}`,
+      );
+    }
+    const updated = { ...row, payout_id: payoutId, updated_at: nowIso() };
+    this.claimLinks.set(id, updated);
+    return updated;
   }
 }

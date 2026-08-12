@@ -150,6 +150,18 @@ export async function handleCommunityBatchInstruction(
   }
 
   const persisted = await deps.repo.transaction(async (tx) => {
+    // Advisory lock on the batch's first idempotency key: concurrent duplicate
+    // deliveries resolve to ONE batch intent, never a second payout.
+    await tx.lockIdempotencyKey(idempotencyKeys[0]);
+    const raced = await tx.getPayoutItemByIdempotencyKey(idempotencyKeys[0]);
+    if (raced) {
+      const loaded = await tx.getPayoutItemForExecution(raced.id);
+      return {
+        duplicate: true,
+        payoutId: raced.payout_id,
+        state: loaded?.item.status ?? "unknown",
+      };
+    }
     const payout = await tx.createPayout({
       workspaceId: workspace.id,
       requesterId: user.userId,
@@ -162,7 +174,7 @@ export async function handleCommunityBatchInstruction(
     });
     for (let index = 0; index < validation.items.length; index += 1) {
       const item = validation.items[index];
-      const { item: createdItem } = await tx.createPayoutItem({
+      const { item: createdItem, created } = await tx.createPayoutItem({
         payoutId: payout.id,
         recipientAddress: item.address,
         amountBaseUnits: item.amountBaseUnits,
@@ -170,6 +182,10 @@ export async function handleCommunityBatchInstruction(
         status: "pending_approval",
         idempotencyKey: idempotencyKeys[index],
       });
+      if (!created) {
+        const loaded = await tx.getPayoutItemForExecution(createdItem.id);
+        return { duplicate: true, payoutId: createdItem.payout_id, state: loaded?.item.status ?? "unknown" };
+      }
       await tx.appendAuditEvent({
         workspaceId: workspace.id,
         payoutId: payout.id,
@@ -194,8 +210,18 @@ export async function handleCommunityBatchInstruction(
       actorId: user.userId,
       metadata: { reason: policy.reason, itemCount: validation.items.length, totalBaseUnits },
     });
-    return { payoutId: payout.id };
+    return { duplicate: false, payoutId: payout.id, state: null };
   });
+
+  if (persisted.duplicate) {
+    return {
+      text: [
+        `This batch instruction was already received.\nCurrent state: ${String(persisted.state).toUpperCase()}\nNo duplicate batch was created.`,
+        "",
+        batchPreview(user.userId, persisted.payoutId, validation.items),
+      ].join("\n"),
+    };
+  }
 
   return {
     text: batchPreview(user.userId, persisted.payoutId, validation.items),

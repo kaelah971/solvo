@@ -89,6 +89,13 @@ export async function handleCommunityPayInstruction(
 
   const recipient = normalizeAddress(resolved.address);
   const persisted = await deps.repo.transaction(async (tx) => {
+    // Advisory lock: concurrent duplicate deliveries resolve to ONE intent.
+    await tx.lockIdempotencyKey(idempotencyKey);
+    const raced = await tx.getPayoutItemByIdempotencyKey(idempotencyKey);
+    if (raced) {
+      const loaded = await tx.getPayoutItemForExecution(raced.id);
+      return { duplicate: true, payoutId: raced.payout_id, itemId: raced.id, state: loaded?.item.status ?? "unknown" };
+    }
     const payout = await tx.createPayout({
       workspaceId: workspace.id,
       requesterId: user.userId,
@@ -99,7 +106,7 @@ export async function handleCommunityPayInstruction(
       chainId: workspace.chain_id,
       tokenAddress: workspace.token_address,
     });
-    const { item } = await tx.createPayoutItem({
+    const { item, created } = await tx.createPayoutItem({
       payoutId: payout.id,
       recipientAddress: recipient,
       amountBaseUnits: amountUnits.value.toString(),
@@ -107,6 +114,10 @@ export async function handleCommunityPayInstruction(
       status: "pending_approval",
       idempotencyKey,
     });
+    if (!created) {
+      const loaded = await tx.getPayoutItemForExecution(item.id);
+      return { duplicate: true, payoutId: item.payout_id, itemId: item.id, state: loaded?.item.status ?? "unknown" };
+    }
     await tx.appendAuditEvent({
       workspaceId: workspace.id,
       payoutId: payout.id,
@@ -125,8 +136,24 @@ export async function handleCommunityPayInstruction(
       actorId: user.userId,
       metadata: { reason: policy.reason },
     });
-    return { payoutId: payout.id, itemId: item.id };
+    return { duplicate: false, payoutId: payout.id, itemId: item.id, state: null };
   });
+
+  if (persisted.duplicate) {
+    return {
+      text: [
+        `This instruction was already received.\nCurrent state: ${String(persisted.state).toUpperCase()}\nNo duplicate request was created.`,
+        "",
+        communityPayPreview({
+          alias: resolved.alias ?? null,
+          address: recipient,
+          amount: amount.amount,
+          requesterId: user.userId,
+          payoutId: persisted.payoutId,
+        }),
+      ].join("\n"),
+    };
+  }
 
   const preview = communityPayPreview({
     alias: resolved.alias ?? null,

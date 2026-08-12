@@ -1,5 +1,54 @@
 export type WorkspaceMode = "sandbox" | "development" | "personal" | "community" | "judge";
 
+export type ClaimStatus = "created" | "claimed" | "expired" | "cancelled" | "approved" | "executed";
+
+/**
+ * Authoritative claim lifecycle graph, enforced inside the repository (both
+ * Postgres and memory) regardless of the from-list a caller passes:
+ *
+ *   created → claimed → approved → executed
+ *   created → cancelled
+ *   claimed → cancelled
+ *   (expired is an effective terminal state, never stored)
+ *
+ * Impossible transitions (executed→claimed, cancelled→approved,
+ * cancelled→executed, expired→claimed, ...) are rejected by the database
+ * layer itself.
+ */
+export const CLAIM_TRANSITIONS: Record<ClaimStatus, readonly ClaimStatus[]> = {
+  created: ["claimed", "cancelled"],
+  claimed: ["approved", "cancelled"],
+  approved: ["executed"],
+  executed: [],
+  expired: [],
+  cancelled: [],
+};
+
+export function canClaimTransition(from: ClaimStatus, to: ClaimStatus): boolean {
+  return CLAIM_TRANSITIONS[from].includes(to);
+}
+
+export type ClaimLinkRow = {
+  id: string;
+  workspace_id: string;
+  requester_id: string;
+  amount_base_units: string;
+  currency_symbol: string;
+  chain_id: string;
+  token_address: string;
+  token_hash: string;
+  token_prefix: string;
+  status: ClaimStatus;
+  claimed_recipient: string | null;
+  claimed_by: string | null;
+  claimed_at: string | null;
+  expires_at: string;
+  payout_id: string | null;
+  idempotency_key: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceRow = {
   id: string;
   mode: WorkspaceMode;

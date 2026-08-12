@@ -1,7 +1,7 @@
 import { Bot, Context, InlineKeyboard } from "grammy";
 
 import { PostgresRepository } from "../db/postgres-repository.ts";
-import { createDbClient } from "../db/client.ts";
+import * as accessor from "../db/accessor.ts";
 import { getTelegramConfig } from "./config.ts";
 import { parseInstruction } from "./parsing.ts";
 import { handlePayInstruction, resolveMode } from "./flows/pay-flow.ts";
@@ -12,8 +12,10 @@ import { handleRecipientAdd, handleRecipientList } from "./flows/recipient-flow.
 import { handleCommunityPayInstruction } from "./flows/community-pay-flow.ts";
 import { handleCommunityBatchInstruction } from "./flows/community-batch-flow.ts";
 import { handleJudgePayInstruction } from "./flows/judge-flow.ts";
+import { handleClaimPayInstruction } from "./flows/claim-flow.ts";
+import { handleClaimApprovalCallbackUpdate } from "./flows/claim-approval-orchestration.ts";
 import { handleApprovalCallbackUpdate } from "./flows/approval-orchestration.ts";
-import { parseCallbackData } from "./community-messages.ts";
+import { parseCallbackData, type ParsedCallbackData } from "./community-messages.ts";
 import { serializeBotError } from "./safe-logging.ts";
 import { helpMessage, startMessage } from "./messages.ts";
 import type { ParseResult, TelegramUser } from "./types.ts";
@@ -22,11 +24,16 @@ type HandlerDeps = {
   repo: PostgresRepository;
 };
 
-const DB = Symbol.for("solvo.db.sql");
 const BOT = Symbol.for("solvo.telegram.bot");
 
 function isGroupChat(type: string): boolean {
   return type === "group" || type === "supergroup";
+}
+
+function isClaimCallback(
+  parsed: ParsedCallbackData,
+): parsed is Extract<ParsedCallbackData, { action: "claim_approve" | "claim_reject" }> {
+  return parsed.action === "claim_approve" || parsed.action === "claim_reject";
 }
 
 function userFromContext(ctx: Context): TelegramUser | null {
@@ -61,7 +68,8 @@ export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
       serializeBotError(caught.error, {
         updateId,
         action: parsed?.action ?? null,
-        payoutId: parsed?.payoutId ?? null,
+        payoutId: parsed !== null && "payoutId" in parsed ? parsed.payoutId : null,
+        claimId: parsed !== null && "claimId" in parsed ? parsed.claimId : null,
       }),
     );
   });
@@ -107,10 +115,26 @@ export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
       },
     };
 
+    if (isClaimCallback(parsed)) {
+      await handleClaimApprovalCallbackUpdate(
+        {
+          action: parsed.action,
+          claimId: parsed.claimId,
+          actorUserId: String(from.id),
+          chatId: String(message.chat.id),
+        },
+        { repo: deps.repo },
+        messenger,
+      );
+      return;
+    }
+
+    const payoutAction = parsed.action;
+    const payoutId = parsed.payoutId;
     await handleApprovalCallbackUpdate(
       {
-        action: parsed.action,
-        payoutId: parsed.payoutId,
+        action: payoutAction,
+        payoutId,
         actorUserId: String(from.id),
         chatId: String(message.chat.id),
       },
@@ -121,7 +145,6 @@ export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
 
   return bot;
 }
-
 async function handlePrivateText(
   ctx: Context,
   parsed: ParseResult,
@@ -160,7 +183,8 @@ async function handlePrivateText(
     parsed.kind === "recipient_add" ||
     parsed.kind === "recipient_list" ||
     parsed.kind === "pay_alias" ||
-    parsed.kind === "batch"
+    parsed.kind === "batch" ||
+    parsed.kind === "claim_pay"
   ) {
     await ctx.reply("This command only works inside an initialized group workspace.");
     return;
@@ -292,6 +316,11 @@ async function handleGroupText(
     }
     return;
   }
+  if (parsed.kind === "claim_pay") {
+    const reply = await handleClaimPayInstruction({ instruction: parsed, user }, { repo: deps.repo });
+    await ctx.reply(reply.text);
+    return;
+  }
 }
 
 async function renderJudgeReply(
@@ -325,12 +354,7 @@ async function renderJudgeReply(
 }
 
 export function getDbRepository(): PostgresRepository | null {
-  if (!process.env.DATABASE_URL) return null;
-  const holder = globalThis as unknown as Record<symbol, unknown>;
-  if (!holder[DB]) {
-    holder[DB] = createDbClient();
-  }
-  return new PostgresRepository(holder[DB] as ReturnType<typeof createDbClient>);
+  return accessor.getDbRepository();
 }
 
 export function getTelegramBot(): Bot | null {

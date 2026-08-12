@@ -123,10 +123,27 @@ export function approvalCallbackData(action: "approve" | "reject", payoutId: str
   return `solvo:${action}:${payoutId}`;
 }
 
-export function parseCallbackData(data: string): { action: "approve" | "reject"; payoutId: string } | null {
-  const match = /^solvo:(approve|reject):([0-9a-f-]{36})$/.exec(data);
-  if (!match) return null;
-  return { action: match[1] as "approve" | "reject", payoutId: match[2] };
+export function claimCallbackData(action: "claim_approve" | "claim_reject", claimId: string): string {
+  return `solvo:${action === "claim_approve" ? "claimapprove" : "claimreject"}:${claimId}`;
+}
+
+export type ParsedCallbackData =
+  | { action: "approve" | "reject"; payoutId: string }
+  | { action: "claim_approve" | "claim_reject"; claimId: string };
+
+export function parseCallbackData(data: string): ParsedCallbackData | null {
+  const payout = /^solvo:(approve|reject):([0-9a-f-]{36})$/.exec(data);
+  if (payout) {
+    return { action: payout[1] as "approve" | "reject", payoutId: payout[2] };
+  }
+  const claim = /^solvo:(claimapprove|claimreject):([0-9a-f-]{36})$/.exec(data);
+  if (claim) {
+    return {
+      action: claim[1] === "claimapprove" ? "claim_approve" : "claim_reject",
+      claimId: claim[2],
+    };
+  }
+  return null;
 }
 
 export function callbackAlreadyHandledMessage(): ApprovalCallbackResult {

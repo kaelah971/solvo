@@ -56,6 +56,22 @@ Modes:
     https://basescan.org/tx/0x9d7d9503dcc716bb6a9192d0e8f80bc9a7483c51c342f98f1f735e2422212071
   - re-verify read-only at any time: `npm run m5:verify-proof`
 
+## Post-submission features
+
+- **Claim links (M7)** are implemented on the `feature/claim-links` branch
+  (`docs/m7-claim-links.md`) and are NOT part of the submitted proof. They
+  were built after the submission snapshot: a sender creates a one-time claim
+  link, the recipient submits a wallet on `/claim/<token>`, and execution
+  happens only after the workspace approves that exact destination. Nothing
+  on the claim page can move funds. `/judgepay` remains the only public
+  execution surface.
+- **Hardening (M8)** is recorded in `docs/m8-hardening-report.md` and is also
+  post-submission: daily-cap reservations, intent creation, the claim
+  lifecycle and claim payout attachment are now enforced at the database
+  layer (workspace row locks, advisory idempotency locks, a claim state
+  graph, a guarded payout attachment, claim-token log redaction). It does
+  not change the submitted main-branch behavior.
+
 ## Deployed URL
 
 - Web: https://solvo-beryl.vercel.app

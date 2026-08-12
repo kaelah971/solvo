@@ -160,7 +160,7 @@ test("essential primitive copy does not use the faint text token", () => {
 
 test("essential page-level notices do not use the faint text token", () => {
   for (const [name, source, copy] of [
-    ["claim availability", pageSources.claim, "Input is disabled until claims are connected"],
+    ["claim availability", pageSources.claim, "Submitting a wallet on this page only records the destination"],
     ["community payout state", pageSources.community, "A real payout summary appears here"],
     ["execution-line explanation", pageSources.howItWorks, "Every stage is a real product state"],
     ["judge availability", pageSources.judge, "Available after configuration"],

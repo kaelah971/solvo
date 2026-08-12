@@ -51,7 +51,7 @@ export async function executeBatch(
     syncPayoutState: false,
   };
 
-  await repo.transitionPayoutState(payout.id, ["approved"], "simulating");
+  await repo.transaction((tx) => tx.transitionPayoutState(payout.id, ["approved"], "simulating"));
 
   const outcomes: BatchItemOutcome[] = [];
   for (let index = 0; index < items.length; index += 1) {
@@ -124,42 +124,53 @@ async function settleAggregate(
   completedCount: number,
 ): Promise<void> {
   const anyExecutionAttempted = outcomes.some((outcome) => outcome.status !== "simulation_failed");
+  // Payout-level settlement is atomic: the transition and its aggregate audit
+  // event commit together, and the state change is serialized with every
+  // other per-workspace capacity transition.
   if (completedCount === outcomes.length) {
-    await repo.transitionPayoutState(payout.id, ["simulating"], "submitted");
-    await repo.transitionPayoutState(payout.id, ["submitted"], "completed");
-    await appendAggregateAudit(repo, payout, "execution_completed", {
-      completed: completedCount,
-      total: outcomes.length,
+    await repo.transaction(async (tx) => {
+      await tx.transitionPayoutState(payout.id, ["simulating"], "submitted");
+      await tx.transitionPayoutState(payout.id, ["submitted"], "completed");
+      await appendAggregateAudit(tx, payout, "execution_completed", {
+        completed: completedCount,
+        total: outcomes.length,
+      });
     });
     return;
   }
   if (completedCount === 0 && !anyExecutionAttempted) {
-    await repo.transitionPayoutState(payout.id, ["simulating"], "simulation_failed");
-    await appendAggregateAudit(repo, payout, "simulation_failed", {
-      completed: 0,
-      total: outcomes.length,
+    await repo.transaction(async (tx) => {
+      await tx.transitionPayoutState(payout.id, ["simulating"], "simulation_failed");
+      await appendAggregateAudit(tx, payout, "simulation_failed", {
+        completed: 0,
+        total: outcomes.length,
+      });
     });
     return;
   }
   if (completedCount === 0 && anyExecutionAttempted) {
     const hasUnknown = outcomes.some((outcome) => outcome.status === "execution_unknown");
-    await repo.transitionPayoutState(payout.id, ["simulating"], "submitted");
-    if (hasUnknown) {
-      await repo.transitionPayoutState(payout.id, ["submitted"], "execution_unknown");
-    } else {
-      await repo.transitionPayoutState(payout.id, ["submitted"], "execution_failed");
-    }
-    await appendAggregateAudit(repo, payout, hasUnknown ? "execution_unknown" : "execution_failed", {
-      completed: 0,
-      total: outcomes.length,
+    await repo.transaction(async (tx) => {
+      await tx.transitionPayoutState(payout.id, ["simulating"], "submitted");
+      if (hasUnknown) {
+        await tx.transitionPayoutState(payout.id, ["submitted"], "execution_unknown");
+      } else {
+        await tx.transitionPayoutState(payout.id, ["submitted"], "execution_failed");
+      }
+      await appendAggregateAudit(tx, payout, hasUnknown ? "execution_unknown" : "execution_failed", {
+        completed: 0,
+        total: outcomes.length,
+      });
     });
     return;
   }
-  await repo.transitionPayoutState(payout.id, ["simulating"], "submitted");
-  await repo.transitionPayoutState(payout.id, ["submitted"], "partially_completed");
-  await appendAggregateAudit(repo, payout, "batch_partially_completed", {
-    completed: completedCount,
-    total: outcomes.length,
+  await repo.transaction(async (tx) => {
+    await tx.transitionPayoutState(payout.id, ["simulating"], "submitted");
+    await tx.transitionPayoutState(payout.id, ["submitted"], "partially_completed");
+    await appendAggregateAudit(tx, payout, "batch_partially_completed", {
+      completed: completedCount,
+      total: outcomes.length,
+    });
   });
 }
 

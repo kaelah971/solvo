@@ -1,6 +1,7 @@
 import type { SolvoRepository } from "../../db/repository.ts";
 import { getJudgeConfig, isJudgeAdmin, type JudgeConfig } from "../../judge/config.ts";
 import { judgeStatusMessage } from "../../judge/messages.ts";
+import { claimStatusMessage } from "../../claim/messages.ts";
 import { JUDGE_DAILY_SPEND_STATES, JUDGE_SUCCESSFUL_STATES, utcDayStartIso } from "./judge-flow.ts";
 import { batchStatusMessage } from "../batch-messages.ts";
 import { communityStatusMessage, notInWorkspaceStatusMessage } from "../community-messages.ts";
@@ -36,18 +37,20 @@ export async function handleStatusInstruction(
       }
       const requesterId = payout.requester_id;
       const approvals = await repo.getPayoutApprovalNotes(payoutId);
+      const claim = payout.source_type === "claim_link" ? await repo.getClaimLinkByPayoutId(payoutId) : null;
+      const claimSection = claim ? `${claimStatusMessage(claim, workspace)}\n\n` : "";
       if (items.length > 1) {
         const labelled = items.map((item) => ({ item, label: item.memo ?? item.recipient_address.slice(0, 10) + "…" }));
         return {
-          text: batchStatusMessage(payout, labelled, workspace, requesterId),
+          text: claimSection + batchStatusMessage(payout, labelled, workspace, requesterId),
           found: true,
         };
       }
       const item = items[0];
       return {
         text: item
-          ? communityStatusMessage(payout, item, requesterId, approvals, workspace)
-          : statusMessage(payout, items, fundsMovedNote(payout)),
+          ? claimSection + communityStatusMessage(payout, item, requesterId, approvals, workspace)
+          : claimSection + statusMessage(payout, items, fundsMovedNote(payout)),
         found: true,
       };
     }

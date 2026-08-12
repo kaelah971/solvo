@@ -333,3 +333,39 @@ describe("judgepay parsing", () => {
     assert.equal(result.kind, "judge_pay");
   });
 });
+
+describe("claimpay parsing (M7)", () => {
+  it("parses a valid /claimpay command", () => {
+    const result = parseInstruction("/claimpay 0.05 USDC");
+    assert.equal(result.kind, "claim_pay");
+    if (result.kind === "claim_pay") {
+      assert.equal(result.amount, "0.05");
+      assert.equal(result.token, "USDC");
+    }
+  });
+
+  it("accepts lowercase token", () => {
+    const result = parseInstruction("/claimpay 0.05 usdc");
+    assert.equal(result.kind, "claim_pay");
+  });
+
+  it("supports the addressed form", () => {
+    const plain = parseInstruction("/claimpay 0.05 USDC");
+    const addressed = parseInstruction("/claimpay@SolvoAgentBot 0.05 USDC", { botUsername: "SolvoAgentBot" });
+    assert.deepEqual(addressed, plain);
+  });
+
+  it("rejects missing, extra or malformed arguments", () => {
+    assert.equal(parseInstruction("/claimpay").kind, "failure");
+    assert.equal(parseInstruction("/claimpay 0.05").kind, "failure");
+    assert.equal(parseInstruction("/claimpay 0.05 ETH").kind, "failure");
+    assert.equal(parseInstruction("/claimpay 0x742d35Cc6634C0532925a3b844Bc454e4438f44e 0.05 USDC").kind, "failure");
+    const malformed = parseInstruction("/claimpay 0.05 USDC extra");
+    assert.equal(malformed.kind, "failure");
+  });
+
+  it("rejects /claimpay addressed to another bot", () => {
+    const result = parseInstruction("/claimpay@SomeOtherBot 0.05 USDC", { botUsername: "SolvoAgentBot" });
+    assert.equal(result.kind, "failure");
+  });
+});

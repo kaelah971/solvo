@@ -1,6 +1,8 @@
 import type { ExecutionState } from "../execution/state-machine.ts";
 import type {
   AuditEventRow,
+  ClaimLinkRow,
+  ClaimStatus,
   ExecutionAttemptRow,
   MemberRole,
   PayoutItemRow,
@@ -98,6 +100,21 @@ export type AppendAuditEventInput = {
 export interface SolvoRepository {
   transaction<T>(fn: (repo: SolvoRepository) => Promise<T>): Promise<T>;
 
+  /**
+   * Serializes per-workspace capacity accounting: locks the workspace row for
+   * the rest of the current transaction so concurrent approvals/executions in
+   * the same workspace cannot both read the same daily-spend sum and
+   * overspend. Must be called BEFORE the sum that reserves capacity.
+   */
+  lockWorkspaceForUpdate(workspaceId: string): Promise<void>;
+
+  /**
+   * Serializes handling of the same logical instruction: takes a Postgres
+   * advisory transaction lock keyed by the idempotency key so concurrent
+   * duplicate deliveries resolve to ONE intent row. No-op in memory.
+   */
+  lockIdempotencyKey(idempotencyKey: string): Promise<void>;
+
   createWorkspace(input: CreateWorkspaceInput): Promise<WorkspaceRow>;
   getWorkspaceById(id: string): Promise<WorkspaceRow | null>;
   getWorkspaceByMode(mode: WorkspaceMode): Promise<WorkspaceRow | null>;
@@ -173,4 +190,46 @@ export interface SolvoRepository {
   getPayoutApprovalNotes(payoutId: string): Promise<string | null>;
 
   appendAuditEvent(input: AppendAuditEventInput): Promise<AuditEventRow>;
+
+  // ── M7 claim links ─────────────────────────────────────────────────────
+
+  createClaimLink(input: {
+    workspaceId: string;
+    requesterId: string;
+    amountBaseUnits: string;
+    currencySymbol: string;
+    chainId: string;
+    tokenAddress: string;
+    tokenHash: string;
+    tokenPrefix: string;
+    expiresAt: string;
+    idempotencyKey: string;
+  }): Promise<ClaimLinkRow>;
+
+  getClaimLinkByTokenHash(tokenHash: string): Promise<ClaimLinkRow | null>;
+  getClaimLinkById(id: string): Promise<ClaimLinkRow | null>;
+  getClaimLinkByIdempotencyKey(idempotencyKey: string): Promise<ClaimLinkRow | null>;
+  getClaimLinkByPayoutId(payoutId: string): Promise<ClaimLinkRow | null>;
+  listClaimsByWorkspace(workspaceId: string): Promise<ClaimLinkRow[]>;
+
+  /**
+   * Single-claim guarantee: only succeeds when the claim is still `created`
+   * AND not expired; stores the recipient atomically. Returns the updated row
+   * or null when the claim is no longer claimable.
+   */
+  claimClaimLink(input: {
+    claimId: string;
+    recipientAddress: string;
+    claimedBy: string;
+    nowIso: string;
+  }): Promise<ClaimLinkRow | null>;
+
+  /**
+   * Strict status transition for claims (created→cancelled, claimed→cancelled,
+   * claimed→approved, approved→executed). Throws when the current status is
+   * not inside `from`.
+   */
+  transitionClaimStatus(id: string, from: readonly ClaimStatus[], to: ClaimStatus): Promise<ClaimLinkRow>;
+
+  setClaimPayoutId(id: string, payoutId: string): Promise<ClaimLinkRow>;
 }

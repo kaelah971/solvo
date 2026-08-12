@@ -14,6 +14,8 @@ import type {
 } from "./repository.ts";
 import type {
   AuditEventRow,
+  ClaimLinkRow,
+  ClaimStatus,
   ExecutionAttemptRow,
   MemberRole,
   PayoutItemRow,
@@ -112,8 +114,30 @@ function mapAttempt(row: RawRow): ExecutionAttemptRow {
   };
 }
 
-function mapAuditEvent(row: RawRow): AuditEventRow {
+function mapClaim(row: RawRow): ClaimLinkRow {
   return {
+    id: String(row.id),
+    workspace_id: String(row.workspace_id),
+    requester_id: String(row.requester_id),
+    amount_base_units: String(row.amount_base_units),
+    currency_symbol: String(row.currency_symbol),
+    chain_id: String(row.chain_id),
+    token_address: String(row.token_address),
+    token_hash: String(row.token_hash),
+    token_prefix: String(row.token_prefix),
+    status: row.status as ClaimLinkRow["status"],
+    claimed_recipient: text(row.claimed_recipient),
+    claimed_by: text(row.claimed_by),
+    claimed_at: iso(row.claimed_at),
+    expires_at: iso(row.expires_at) ?? "",
+    payout_id: text(row.payout_id),
+    idempotency_key: String(row.idempotency_key),
+    created_at: iso(row.created_at) ?? "",
+    updated_at: iso(row.updated_at) ?? "",
+  };
+}
+
+function mapAuditEvent(row: RawRow): AuditEventRow {  return {
     id: String(row.id),
     workspace_id: String(row.workspace_id),
     payout_id: text(row.payout_id),
@@ -161,6 +185,14 @@ export class PostgresRepository implements SolvoRepository {
     return this.sql.begin(
       async (tx): Promise<T> => fn(new PostgresRepository(tx as unknown as Sql)),
     ) as Promise<T>;
+  }
+
+  async lockWorkspaceForUpdate(workspaceId: string): Promise<void> {
+    await this.sql`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
+  }
+
+  async lockIdempotencyKey(idempotencyKey: string): Promise<void> {
+    await this.sql`SELECT pg_advisory_xact_lock(hashtextextended(${idempotencyKey}, 0))`;
   }
 
   async createWorkspace(input: CreateWorkspaceInput): Promise<WorkspaceRow> {
@@ -666,5 +698,121 @@ export class PostgresRepository implements SolvoRepository {
       return `REJECTED BY ${role}${actor}`;
     }
     return `APPROVED BY ${role}${actor}`;
+  }
+
+  // ── M7 claim links ─────────────────────────────────────────────────────
+
+  async createClaimLink(input: {
+    workspaceId: string;
+    requesterId: string;
+    amountBaseUnits: string;
+    currencySymbol: string;
+    chainId: string;
+    tokenAddress: string;
+    tokenHash: string;
+    tokenPrefix: string;
+    expiresAt: string;
+    idempotencyKey: string;
+  }): Promise<ClaimLinkRow> {
+    const rows = await this.sql<RawRow[]>`
+      INSERT INTO claim_links (
+        workspace_id, requester_id, amount_base_units, currency_symbol, chain_id, token_address,
+        token_hash, token_prefix, expires_at, idempotency_key
+      ) VALUES (
+        ${input.workspaceId}, ${input.requesterId}, ${input.amountBaseUnits}, ${input.currencySymbol},
+        ${input.chainId}, ${input.tokenAddress}, ${input.tokenHash}, ${input.tokenPrefix},
+        ${input.expiresAt}, ${input.idempotencyKey}
+      )
+      RETURNING *
+    `;
+    return mapClaim(rows[0]);
+  }
+
+  async getClaimLinkByTokenHash(tokenHash: string): Promise<ClaimLinkRow | null> {
+    const rows = await this.sql<RawRow[]>`SELECT * FROM claim_links WHERE token_hash = ${tokenHash}`;
+    return rows.length > 0 ? mapClaim(rows[0]) : null;
+  }
+
+  async getClaimLinkById(id: string): Promise<ClaimLinkRow | null> {
+    const rows = await this.sql<RawRow[]>`SELECT * FROM claim_links WHERE id = ${id}`;
+    return rows.length > 0 ? mapClaim(rows[0]) : null;
+  }
+
+  async getClaimLinkByIdempotencyKey(idempotencyKey: string): Promise<ClaimLinkRow | null> {
+    const rows = await this.sql<RawRow[]>`SELECT * FROM claim_links WHERE idempotency_key = ${idempotencyKey}`;
+    return rows.length > 0 ? mapClaim(rows[0]) : null;
+  }
+
+  async getClaimLinkByPayoutId(payoutId: string): Promise<ClaimLinkRow | null> {
+    const rows = await this.sql<RawRow[]>`SELECT * FROM claim_links WHERE payout_id = ${payoutId}`;
+    return rows.length > 0 ? mapClaim(rows[0]) : null;
+  }
+
+  async listClaimsByWorkspace(workspaceId: string): Promise<ClaimLinkRow[]> {
+    const rows = await this.sql<RawRow[]>`SELECT * FROM claim_links WHERE workspace_id = ${workspaceId} ORDER BY created_at`;
+    return rows.map(mapClaim);
+  }
+
+  async claimClaimLink(input: {
+    claimId: string;
+    recipientAddress: string;
+    claimedBy: string;
+    nowIso: string;
+  }): Promise<ClaimLinkRow | null> {
+    const rows = await this.sql<RawRow[]>`
+      UPDATE claim_links
+      SET status = 'claimed',
+          claimed_recipient = ${input.recipientAddress},
+          claimed_by = ${input.claimedBy},
+          claimed_at = ${input.nowIso}
+      WHERE id = ${input.claimId}
+        AND status = 'created'
+        AND expires_at > ${input.nowIso}
+      RETURNING *
+    `;
+    return rows.length > 0 ? mapClaim(rows[0]) : null;
+  }
+
+  async transitionClaimStatus(
+    id: string,
+    from: readonly ClaimStatus[],
+    to: ClaimStatus,
+  ): Promise<ClaimLinkRow> {
+    // The lifecycle graph is enforced in SQL itself: a caller-supplied from
+    // list can never bypass it (e.g. cancelled → executed stays impossible).
+    const rows = await this.sql<RawRow[]>`
+      UPDATE claim_links SET status = ${to}
+      WHERE id = ${id} AND status::text = ANY(${from as string[]})
+        AND (
+          (status = 'created' AND ${to} IN ('claimed', 'cancelled'))
+          OR (status = 'claimed' AND ${to} IN ('approved', 'cancelled'))
+          OR (status = 'approved' AND ${to} = 'executed')
+        )
+      RETURNING *
+    `;
+    if (rows.length === 0) {
+      const current = await this.sql<RawRow[]>`SELECT status FROM claim_links WHERE id = ${id}`;
+      if (current.length === 0) throw new Error(`claim_links: record not found: ${id}`);
+      throw new StateTransitionError(current[0].status as ExecutionState, to as ExecutionState);
+    }
+    return mapClaim(rows[0]);
+  }
+
+  async setClaimPayoutId(id: string, payoutId: string): Promise<ClaimLinkRow> {
+    // A payout may only be attached once, and only after the claim was
+    // approved — never before a valid approval, never twice.
+    const rows = await this.sql<RawRow[]>`
+      UPDATE claim_links SET payout_id = ${payoutId}
+      WHERE id = ${id} AND status = 'approved' AND payout_id IS NULL
+      RETURNING *
+    `;
+    if (rows.length === 0) {
+      const current = await this.sql<RawRow[]>`SELECT status, payout_id FROM claim_links WHERE id = ${id}`;
+      if (current.length === 0) throw new Error(`claim_links: record not found: ${id}`);
+      throw new Error(
+        `claim_links: cannot attach payout to claim ${id}: status=${current[0].status}, payout_id=${current[0].payout_id ?? "null"}`,
+      );
+    }
+    return mapClaim(rows[0]);
   }
 }

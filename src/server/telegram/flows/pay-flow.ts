@@ -130,6 +130,20 @@ export async function handlePayInstruction(
   );
 
   const persisted = await deps.repo.transaction(async (tx) => {
+    // Serialize identical deliveries: the advisory lock keyed by the
+    // idempotency key means concurrent duplicate deliveries resolve to the
+    // SAME intent row — never a second payout, never a second execution.
+    await tx.lockIdempotencyKey(idempotencyKey);
+    const raced = await tx.getPayoutItemByIdempotencyKey(idempotencyKey);
+    if (raced) {
+      const loaded = await tx.getPayoutItemForExecution(raced.id);
+      return {
+        duplicate: true,
+        payoutId: raced.payout_id,
+        itemId: raced.id,
+        state: loaded?.item.status ?? "unknown",
+      };
+    }
     const status = policy.decision === "blocked" ? "cancelled" : "approved";
     const payout = await tx.createPayout({
       workspaceId: workspace.id,
@@ -141,7 +155,7 @@ export async function handlePayInstruction(
       chainId: workspaceChainId,
       tokenAddress: workspaceToken,
     });
-    const { item } = await tx.createPayoutItem({
+    const { item, created } = await tx.createPayoutItem({
       payoutId: payout.id,
       recipientAddress: recipient,
       amountBaseUnits: amountUnits,
@@ -149,6 +163,16 @@ export async function handlePayInstruction(
       status,
       idempotencyKey,
     });
+    if (!created) {
+      // A concurrent delivery created the intent first; never execute it twice.
+      const loaded = await tx.getPayoutItemForExecution(item.id);
+      return {
+        duplicate: true,
+        payoutId: item.payout_id,
+        itemId: item.id,
+        state: loaded?.item.status ?? "unknown",
+      };
+    }
     await tx.appendAuditEvent({
       workspaceId: workspace.id,
       payoutId: payout.id,
@@ -179,8 +203,18 @@ export async function handlePayInstruction(
         metadata: { decision: policy.decision, mode },
       });
     }
-    return { payoutId: payout.id, itemId: item.id };
+    return { duplicate: false, payoutId: payout.id, itemId: item.id, state: null };
   });
+
+  if (persisted.duplicate) {
+    return {
+      messages: [requestReceived(persisted.payoutId)],
+      final: `This instruction was already received.\nCurrent state: ${String(persisted.state).toUpperCase()}\nNo duplicate execution was started.`,
+      outcome: "duplicate",
+      payoutId: persisted.payoutId,
+      itemId: persisted.itemId,
+    };
+  }
 
   if (policy.decision === "blocked") {
     return {

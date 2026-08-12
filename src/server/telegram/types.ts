@@ -41,6 +41,12 @@ export type JudgePayInstruction = {
   token: "USDC";
 };
 
+export type ClaimPayInstruction = {
+  kind: "claim_pay";
+  amount: string;
+  token: "USDC";
+};
+
 export type StatusInstruction = {
   kind: "status";
   payoutId: string;
@@ -80,6 +86,7 @@ export type Instruction =
   | PayAliasInstruction
   | BatchInstruction
   | JudgePayInstruction
+  | ClaimPayInstruction
   | StatusInstruction
   | WorkspaceInitInstruction
   | MemberAddInstruction

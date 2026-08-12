@@ -9,6 +9,7 @@ export type ClaimState =
   | "waiting-approval"
   | "executing"
   | "completed"
+  | "cancelled"
   | "review-required";
 
 type ClaimPanelConfig = {
@@ -60,6 +61,12 @@ const claimStates: Record<ClaimState, ClaimPanelConfig> = {
     tone: "complete",
     headline: "Payment completed.",
     body: "Proof is the success state. The transaction hash and audit record outrank any celebration.",
+  },
+  cancelled: {
+    badge: "CLAIM CANCELLED",
+    tone: "error",
+    headline: "This claim was cancelled.",
+    body: "The sender or an approver cancelled this claim before execution. Nothing was moved and the link cannot be reused.",
   },
   "review-required": {
     badge: "REVIEW REQUIRED",
