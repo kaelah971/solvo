@@ -316,6 +316,22 @@ export class PostgresRepository implements SolvoRepository {
     return rows[0].total ?? "0";
   }
 
+  async countPayoutItemsByRequesterStates(
+    workspaceId: string,
+    requesterId: string,
+    statuses: readonly ExecutionState[],
+  ): Promise<number> {
+    const rows = await this.sql<{ n: string }[]>`
+      SELECT count(*) AS n
+      FROM payout_items pi
+      JOIN payouts p ON p.id = pi.payout_id
+      WHERE p.workspace_id = ${workspaceId}
+        AND p.requester_id = ${requesterId}
+        AND pi.status::text = ANY(${statuses as string[]})
+    `;
+    return Number(rows[0].n);
+  }
+
   async createPayout(input: CreatePayoutInput): Promise<PayoutRow> {
     const rows = await this.sql<RawRow[]>`
       INSERT INTO payouts (

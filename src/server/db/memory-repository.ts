@@ -191,6 +191,22 @@ export class MemoryRepository implements SolvoRepository {
     return total.toString();
   }
 
+  async countPayoutItemsByRequesterStates(
+    workspaceId: string,
+    requesterId: string,
+    statuses: readonly ExecutionState[],
+  ): Promise<number> {
+    let count = 0;
+    for (const item of this.payoutItems.values()) {
+      const payout = this.payouts.get(item.payout_id);
+      if (!payout || payout.workspace_id !== workspaceId) continue;
+      if (payout.requester_id !== requesterId) continue;
+      if (!statuses.includes(item.status as ExecutionState)) continue;
+      count += 1;
+    }
+    return count;
+  }
+
   async createPayout(input: CreatePayoutInput): Promise<PayoutRow> {
     const row: PayoutRow = {
       id: randomUUID(),

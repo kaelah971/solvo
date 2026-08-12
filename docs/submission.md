@@ -14,8 +14,8 @@ Modes:
 - **Development** — allowlisted operator real execution (0.10 USDC/tx cap).
 - **Community** — group payouts require a human approval by an owner/approver
   (separation of duty enforced).
-- **Judge** — restricted real execution for allowlisted hackathon judges via
-  `/judgepay` (0.10 USDC/tx, 1.00 USDC/day caps).
+- **Judge** — self-serve PUBLIC real execution via `/judgepay` (0.01 USDC/tx,
+  0.25 USDC/day, 1.00 USDC lifetime, one successful payment per user).
 
 ## KeeperHub usage
 
@@ -64,25 +64,28 @@ Modes:
 - Telegram webhook: https://<deployed-domain>/api/telegram/webhook
 - Bot: https://t.me/SolvoAgentBot
 
-## Final judge test procedure
+## Final judge test procedure (self-serve)
 
-1. Operator sets `JUDGE_MODE_ENABLED=true` and
-   `TELEGRAM_JUDGE_USER_IDS=<judge numeric id>` on the deployed environment.
+1. Operator sets `JUDGE_MODE_ENABLED=true` on the deployed environment
+   (`TELEGRAM_JUDGE_USER_IDS` stays EMPTY for public self-serve; set it only
+   to lock Judge Mode down to admins).
 2. Operator runs `npm run judge:doctor` → confirm `READY FOR JUDGE TEST: YES`.
 3. Operator funds the executing KeeperHub wallet with Base USDC (and Base ETH
    for gas) — today the configured org wallet
    `0x3A77CbC62e8dAdbAF6ff29Bd082dc3f71b1c150E`; a separate KeeperHub org
    wallet is recommended for the final judge proof (see isolation note).
-4. Judge opens the bot and sends:
+4. Any judge opens the bot and sends:
    `/judgepay <judge-recipient-wallet> 0.01 USDC`
 5. Expected: `JUDGE AUTO-APPROVED` → `✓ KeeperHub simulation passed` →
    execution completed → `PROVE` block with execution ID, tx hash, BaseScan
    link, amount, recipient, status.
 6. Judge runs `/status <payout_id>`; output shows judge mode, state, caps,
-   execution ID, tx hash, BaseScan link, and funds-moved note.
+   daily + lifetime spend, execution ID, tx hash, BaseScan link, and
+   funds-moved note.
 7. Judge verifies on BaseScan: success, exact amount, recipient, sender =
    configured KeeperHub wallet, chain 8453.
-8. Daily cap reflects the new spend (`DAILY SPEND` line in `/status`).
+8. Daily/lifetime caps reflect the new spend (`DAILY SPEND` / `LIFETIME`
+   lines in `/status`). One successful payment per Telegram user.
 
 ## Demo script
 
@@ -102,9 +105,11 @@ Modes:
 ## Environment safety notes
 
 - Real execution only for: allowlisted development users, community
-  approvers, and allowlisted judges. Everything else is sandbox.
-- Caps: 0.10 USDC/tx and 1.00 USDC/day in development and judge modes;
-  community workspaces carry their own per-tx/daily limits.
+  approvers, and the PUBLIC judge boundary (`/judgepay` only). Everything
+  else is sandbox. `/pay` and `/batch` are never public real execution.
+- Caps: 0.10 USDC/tx and 1.00 USDC/day in development; 0.01 USDC/tx, 0.25
+  USDC/day, 1.00 USDC lifetime, and one successful payment per user in judge
+  mode; community workspaces carry their own per-tx/daily limits.
 - Idempotency: duplicate Telegram delivery never executes twice; KeeperHub
   idempotency keys are derived from the persisted item.
 - `execution_unknown` is never auto-retried; nothing is ever rebroadcast.
@@ -118,7 +123,7 @@ Modes:
 | Sandbox workspace (`/pay` non-allowlisted) | No — simulation only |
 | Development workspace (`/pay` allowlisted) | Yes — real Base USDC, capped |
 | Community workspace (group `/pay`, `/batch` + approval) | Yes — after human approval |
-| Judge Mode (`/judgepay` allowlisted) | Yes — real Base USDC, capped |
+| Judge Mode (`/judgepay`, any user) | Yes — real Base USDC, capped, one per user |
 | Web pages (/, /judge, /sandbox, …) | Never — informational only |
 
 ## Deployment
@@ -130,7 +135,10 @@ Steps (Vercel recommended for the Next.js app + webhook):
 3. Set production env vars (see `docs/m6-judge-mode-deployment.md` and
    `.env.example`): `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`,
    `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ALLOWED_DEV_USER_IDS`,
-   `JUDGE_MODE_ENABLED`, `TELEGRAM_JUDGE_USER_IDS`, `KEEPERHUB_API_KEY`,
+   `JUDGE_MODE_ENABLED`, optional `TELEGRAM_JUDGE_USER_IDS`,
+   `JUDGE_PER_TX_LIMIT_USDC`, `JUDGE_DAILY_LIMIT_USDC`,
+   `JUDGE_LIFETIME_LIMIT_USDC`, `JUDGE_MAX_SUCCESSFUL_PAYMENTS_PER_USER`,
+   `KEEPERHUB_API_KEY`,
    `NEXT_PUBLIC_TELEGRAM_BOT_URL` (https://t.me/SolvoAgentBot).
 4. Deploy, then set the Telegram webhook:
    `npm run telegram:set-webhook -- --url https://<domain>/api/telegram/webhook`

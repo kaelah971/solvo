@@ -1,7 +1,7 @@
 import type { SolvoRepository } from "../../db/repository.ts";
-import { getJudgeConfig, isJudgeUser, type JudgeConfig } from "../../judge/config.ts";
+import { getJudgeConfig, isJudgeAdmin, type JudgeConfig } from "../../judge/config.ts";
 import { judgeStatusMessage } from "../../judge/messages.ts";
-import { JUDGE_DAILY_SPEND_STATES, utcDayStartIso } from "./judge-flow.ts";
+import { JUDGE_DAILY_SPEND_STATES, JUDGE_SUCCESSFUL_STATES, utcDayStartIso } from "./judge-flow.ts";
 import { batchStatusMessage } from "../batch-messages.ts";
 import { communityStatusMessage, notInWorkspaceStatusMessage } from "../community-messages.ts";
 import { fundsMovedNote, notFound, statusMessage } from "../messages.ts";
@@ -13,6 +13,8 @@ export type StatusContext = {
   /** injected for tests; default reads process env */
   judgeConfig?: JudgeConfig;
 };
+
+const JUDGE_LIFETIME_START_ISO = "1970-01-01T00:00:00.000Z";
 
 export async function handleStatusInstruction(
   payoutId: string,
@@ -51,8 +53,10 @@ export async function handleStatusInstruction(
     }
     if (workspace?.mode === "judge") {
       const judgeConfig = context.judgeConfig ?? getJudgeConfig();
-      if (!isJudgeUser(context.userId, judgeConfig)) {
-        // Do not leak payout existence to non-judges.
+      const isOwner = payout.requester_id === context.userId;
+      const isAdmin = isJudgeAdmin(context.userId, judgeConfig);
+      if (!isOwner && !isAdmin) {
+        // Do not leak payout existence to other users.
         return { text: notFound(), found: false };
       }
       const item = items[0];
@@ -64,8 +68,28 @@ export async function handleStatusInstruction(
         JUDGE_DAILY_SPEND_STATES,
         utcDayStartIso(),
       );
+      const lifetimeSpend = await repo.sumPayoutItemsByWorkspaceStates(
+        workspace.id,
+        JUDGE_DAILY_SPEND_STATES,
+        JUDGE_LIFETIME_START_ISO,
+      );
+      const successfulByUser = await repo.countPayoutItemsByRequesterStates(
+        workspace.id,
+        payout.requester_id ?? "",
+        JUDGE_SUCCESSFUL_STATES,
+      );
       return {
-        text: judgeStatusMessage(payout, item, workspace, todaySpend, judgeConfig.dailyLimitBaseUnits),
+        text: judgeStatusMessage(
+          payout,
+          item,
+          workspace,
+          todaySpend,
+          judgeConfig.dailyLimitBaseUnits,
+          lifetimeSpend,
+          judgeConfig.lifetimeLimitBaseUnits,
+          successfulByUser,
+          judgeConfig.maxSuccessfulPaymentsPerUser,
+        ),
         found: true,
       };
     }

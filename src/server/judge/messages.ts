@@ -92,6 +92,10 @@ export function judgeStatusMessage(
   workspace: WorkspaceRow,
   todaySpendBaseUnits: string,
   dailyLimitBaseUnits: string,
+  lifetimeSpendBaseUnits: string,
+  lifetimeLimitBaseUnits: string,
+  successfulByUser: number,
+  maxSuccessfulPerUser: number,
 ): string {
   const executed = payout.status === "completed";
   const body = [
@@ -104,6 +108,8 @@ export function judgeStatusMessage(
     `AMOUNT      ${baseUnitsToUsdc(BigInt(item.amount_base_units))} USDC`,
     `RECIPIENT   ${item.recipient_address}`,
     `DAILY SPEND ${baseUnitsToUsdc(BigInt(todaySpendBaseUnits))} / ${baseUnitsToUsdc(BigInt(dailyLimitBaseUnits))} USDC`,
+    `LIFETIME    ${baseUnitsToUsdc(BigInt(lifetimeSpendBaseUnits))} / ${baseUnitsToUsdc(BigInt(lifetimeLimitBaseUnits))} USDC`,
+    `MY PAYMENTS ${successfulByUser} / ${maxSuccessfulPerUser} completed`,
     executed ? "FUNDS       MOVED ON BASE" : "FUNDS       NO FUNDS MOVED",
   ];
   if (item.keeperhub_execution_id) {

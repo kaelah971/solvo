@@ -1,13 +1,20 @@
-# M6 — Judge Mode + Deployment
+# M6 / M6.1 — Judge Mode + Deployment
 
 ## Purpose
 
-Judge Mode is a restricted **real-execution** environment so hackathon judges
-can independently verify Solvo without the founder operating the backend.
+Judge Mode is a **self-serve public** real-execution environment so
+hackathon judges can independently verify Solvo — open @SolvoAgentBot and
+complete one tiny real Base USDC payment — **without contacting the project
+owner**.
 
-- It is **NOT sandbox** — real Base USDC moves for authorized judges.
-- It is **NOT public** — only allowlisted Telegram numeric IDs can execute.
-- It is **NOT** the development operator path or the community workspace.
+- It is **NOT sandbox** — real Base USDC moves.
+- Since M6.1 it is **public**: any Telegram user can complete ONE successful
+  real judge payment (`/judgepay`) under strict abuse limits. No allowlist is
+  required.
+- It is **NOT** the development operator path and **NOT** the community
+  workspace.
+- Only `/judgepay` is public. `/pay` and `/batch` never execute publicly
+  (sandbox / community approval behavior is unchanged).
 - Every judge transaction is persisted, auditable, and returns proof
   (execution ID, tx hash, BaseScan link, amount, recipient, status).
 
@@ -15,11 +22,10 @@ Target flow:
 
 ```
 JUDGE
-→ opens the Solvo Telegram bot
-→ is recognized as an authorized judge (numeric Telegram allowlist)
+→ opens @SolvoAgentBot
 → submits /judgepay <address> <amount> USDC
-→ Solvo validates + applies the deterministic judge policy
-→ auto-approval happens only within strict caps
+→ Solvo validates + applies the deterministic public judge policy
+→ auto-approval happens only within strict caps (0.01 USDC per tx)
 → KeeperHub simulates → executes
 → Solvo persists proof
 → Telegram returns the tx hash and execution receipt
@@ -33,9 +39,11 @@ Server-side only. Never use `NEXT_PUBLIC_` for these. Never log them.
 | Variable | Meaning | Default |
 |---|---|---|
 | `JUDGE_MODE_ENABLED` | `"true"` enables the judge boundary | `false` |
-| `TELEGRAM_JUDGE_USER_IDS` | comma-separated numeric Telegram IDs of judges | empty |
-| `JUDGE_PER_TX_LIMIT_USDC` | per-transaction cap | `0.10` |
-| `JUDGE_DAILY_LIMIT_USDC` | daily cap | `1.00` |
+| `TELEGRAM_JUDGE_USER_IDS` | OPTIONAL admin override allowlist (numeric IDs). Empty = public self-serve; non-empty = only these admins can execute | empty |
+| `JUDGE_PER_TX_LIMIT_USDC` | per-transaction cap | `0.01` |
+| `JUDGE_DAILY_LIMIT_USDC` | global daily cap | `0.25` |
+| `JUDGE_LIFETIME_LIMIT_USDC` | global lifetime cap | `1.00` |
+| `JUDGE_MAX_SUCCESSFUL_PAYMENTS_PER_USER` | per-Telegram-user successful execution cap | `1` |
 | `KEEPERHUB_JUDGE_INTEGRATION_ID` | optional KeeperHub wallet integration id | empty |
 
 `KEEPERHUB_JUDGE_INTEGRATION_ID` is only forwarded if the KeeperHub MCP's
@@ -45,15 +53,35 @@ is a no-op until the platform supports per-integration direct execution.
 
 All vars are documented in `.env.example`.
 
-## Judge allowlist setup
+## Public access and admin override
 
-1. Ask the judge for their Telegram numeric ID (e.g. via @userinfobot).
-2. Set `TELEGRAM_JUDGE_USER_IDS=111111111,222222222` in the deployment env.
-3. Set `JUDGE_MODE_ENABLED=true`.
-4. Run `npm run judge:doctor` and confirm `READY FOR JUDGE TEST: YES`.
+- **Public (default):** with `TELEGRAM_JUDGE_USER_IDS` EMPTY, any Telegram
+  user can execute one real capped judge payment. No contact with the project
+  owner is needed.
+- **Admin override:** setting `TELEGRAM_JUDGE_USER_IDS` to numeric IDs locks
+  `/judgepay` down to those admins only (useful for a monitored final demo or
+  abuse control). Admins are exempt from the per-user success cap so the
+  operator can run multiple proofs, but remain subject to the per-tx, daily,
+  and lifetime caps.
 
-Usernames and display names are never accepted as authority. The allowlist is
-the only identity primitive.
+Usernames and display names are never accepted as authority.
+
+## Judge caps (M6.1 defaults)
+
+| Cap | Default | Meaning |
+|---|---|---|
+| Per transaction | 0.01 USDC | hard per-payment cap |
+| Global daily | 0.25 USDC | all judge spend (UTC day) |
+| Global lifetime | 1.00 USDC | all judge spend since enablement |
+| Per user | 1 successful payment | one completed real judge payment per Telegram user |
+
+Caps count conservative in-flight states (`approved`, `simulating`,
+`submitted`, `confirming`, `completed`, `execution_unknown`) toward
+daily/lifetime spend. The daily, lifetime, and per-user caps are re-checked
+inside the persistence transaction (no TOCTOU within the architecture's
+guarantees). The seeded judge workspace limits in
+`migrations/0007_judge_mode.sql` + `0008_judge_public_limits.sql` match the
+defaults.
 
 ## Wallet / isolation model
 
@@ -73,29 +101,34 @@ M6 section 2, Solvo does **not fake isolation**:
   org/account** with its own funded wallet if the platform does not add
   integration selectors — that is the only platform-supported separation.
 
-## Policy limits
+## Policy limits (M6.1)
 
 AUTO-APPROVE only when **every** gate passes; otherwise BLOCK with a plain
 reason and nothing persisted/submitted:
 
 - `JUDGE_MODE_ENABLED=true`
-- Telegram numeric user ID ∈ `TELEGRAM_JUDGE_USER_IDS`
+- public self-serve: admin allowlist EMPTY, OR Telegram numeric user ID ∈
+  `TELEGRAM_JUDGE_USER_IDS` (admin-restricted mode)
 - amount > 0
-- amount ≤ 0.10 USDC (100,000 base units)
-- daily judge spend after this payment ≤ 1.00 USDC (1,000,000 base units)
+- amount ≤ 0.01 USDC (10,000 base units)
+- daily judge spend after this payment ≤ 0.25 USDC (250,000 base units)
+- lifetime judge spend after this payment ≤ 1.00 USDC (1,000,000 base units)
+- public user has not already completed their 1 allowed successful payment
+  (admins exempt)
 - chain 8453 (Base) and token = canonical Base USDC
   (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`)
 - judge workspace active
 
 There is **no** manual approval step in Judge Mode. No usernames, no display
-names, no "anyone in the group", no token/network choice, no batch.
+names, no token/network choice, no batch, no aliases, no claim links, no
+natural language.
 
 ## Telegram commands
 
 | Command | Behavior |
 |---|---|
-| `/judgepay <address> <amount> USDC` | Judge payment. Only allowlisted judges. |
-| `/status <payout_id>` | Judge payouts show mode, amount, recipient, state, execution ID, tx hash, BaseScan link, daily spend, funds-moved note. Non-judges get "not found". |
+| `/judgepay <address> <amount> USDC` | Public judge payment under caps (any user, max 0.01 USDC, one per user). |
+| `/status <payout_id>` | Judge payouts show mode, amount, recipient, state, execution ID, tx hash, BaseScan link, daily + lifetime spend, my-payments count, funds-moved note. The CALLER'S OWN payout is always visible; other users get "not found"; admins may inspect any. |
 | `/help` | Lists Judge Mode in the modes section. |
 
 Natural language is **not** supported in Judge Mode (deferred). Aliases and
@@ -125,14 +158,17 @@ npm run telegram:set-webhook -- --url https://<domain>/api/telegram/webhook
 
 ## Security model
 
-- Judge allowlist is numeric IDs only, server-side.
+- Public judge execution is limited to `/judgepay` under hard caps; `/pay`
+  and `/batch` real execution remain unchanged (sandbox / community approval).
+- Admin allowlist (when set) is numeric IDs only, server-side.
 - No public web route can execute funds; `/judge` is informational.
 - Deterministic parser + policy; no LLM.
-- Idempotency keys are unique per chat+message+`judgepay`.
-- Daily cap re-checked inside the persistence transaction (no TOCTOU within
-  the architecture's guarantees).
-- Conservative daily-cap accounting: counts `approved`, `simulating`,
-  `submitted`, `confirming`, `completed`, `execution_unknown`; excludes
+- Idempotency keys are unique per chat+message+`judgepay`; duplicates never
+  execute twice.
+- Daily, lifetime, and per-user caps are re-checked inside the persistence
+  transaction (no TOCTOU within the architecture's guarantees).
+- Conservative cap accounting: counts `approved`, `simulating`, `submitted`,
+  `confirming`, `completed`, `execution_unknown`; excludes
   cancelled/validation_failed/simulation_failed where funds did not move.
 - Secrets are never logged (bot token, webhook secret, KeeperHub key,
   database URL, private keys).
@@ -156,22 +192,25 @@ funded wallet (see isolation model).
 npm run judge:doctor
 ```
 
-Read-only. Reports: Judge Mode enabled/disabled, number of judge IDs, DB OK,
-judge workspace state/limits, KeeperHub readiness + wallet, per-tx/daily
-caps, today's judge spend, Telegram bot identity, webhook state, and
-`READY FOR JUDGE TEST YES/NO`. Never executes a payment.
+Read-only. Reports: Judge Mode enabled/disabled, PUBLIC SELF-SERVE vs ADMIN
+RESTRICTED access mode, admin ID count, per-tx/daily/lifetime caps, per-user
+success cap, DB OK, judge workspace state/limits, today's + lifetime judge
+spend, KeeperHub readiness + wallet, Telegram bot identity, webhook state,
+and `READY FOR JUDGE TEST YES/NO`. Never executes a payment.
 
-## How judges test safely
+## How judges test safely (self-serve)
 
-1. Judge opens the bot privately (or a group) and sends
-   `/judgepay <recipient-wallet> 0.01 USDC`.
+1. Judge opens @SolvoAgentBot and sends
+   `/judgepay <recipient-wallet> 0.01 USDC` — no allowlist, no contact with
+   the project owner.
 2. Solvo replies with `JUDGE PAYMENT REQUEST` → `CHECK` → `EXECUTE` → `PROVE`
    (execution ID, tx hash, BaseScan link, amount, recipient, status).
-3. Judge runs `/status <payout_id>` to re-inspect.
+3. Judge runs `/status <payout_id>` to re-inspect (their own payout).
 4. Judge verifies the transfer on BaseScan.
 
-Blocked attempts return `JUDGE PAYMENT BLOCKED / Reason: … / Nothing was
-submitted.`
+Each Telegram user can complete ONE successful judge payment; a second
+attempt is blocked with a plain reason. Blocked attempts return
+`JUDGE PAYMENT BLOCKED / Reason: … / Nothing was submitted.`
 
 ## What proof is returned
 

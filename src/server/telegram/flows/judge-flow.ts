@@ -44,7 +44,7 @@ export type JudgeFlowDeps = {
   config?: JudgeConfig;
 };
 
-/** Conservative daily-cap states: only states where funds may have moved. */
+/** Conservative daily/lifetime-cap states: only states where funds may have moved. */
 export const JUDGE_DAILY_SPEND_STATES = [
   "approved",
   "simulating",
@@ -53,6 +53,11 @@ export const JUDGE_DAILY_SPEND_STATES = [
   "completed",
   "execution_unknown",
 ] as const;
+
+/** States that count as a completed successful execution for the per-user cap. */
+export const JUDGE_SUCCESSFUL_STATES = ["completed"] as const;
+
+const LIFETIME_START_ISO = "1970-01-01T00:00:00.000Z";
 
 export function utcDayStartIso(): string {
   const now = new Date();
@@ -139,10 +144,20 @@ export async function handleJudgePayInstruction(
     JUDGE_DAILY_SPEND_STATES,
     utcDayStartIso(),
   );
+  const lifetimeSpend = await deps.repo.sumPayoutItemsByWorkspaceStates(
+    workspace.id,
+    JUDGE_DAILY_SPEND_STATES,
+    LIFETIME_START_ISO,
+  );
+  const successfulByUser = await deps.repo.countPayoutItemsByRequesterStates(
+    workspace.id,
+    user.userId,
+    JUDGE_SUCCESSFUL_STATES,
+  );
 
   const policy = evaluateJudgeRequest({
     modeEnabled: config.enabled,
-    judgeUserIds: config.judgeUserIds,
+    adminUserIds: config.adminUserIds,
     userId: user.userId,
     amountBaseUnits,
     chainId: workspace.chain_id,
@@ -150,7 +165,11 @@ export async function handleJudgePayInstruction(
     workspaceActive: workspace.status === "active",
     perTxLimitBaseUnits: config.perTxLimitBaseUnits,
     dailyLimitBaseUnits: config.dailyLimitBaseUnits,
+    lifetimeLimitBaseUnits: config.lifetimeLimitBaseUnits,
+    maxSuccessfulPaymentsPerUser: config.maxSuccessfulPaymentsPerUser,
+    successfulPaymentsByUser: successfulByUser,
     currentDailySpendBaseUnits: dailySpend,
+    lifetimeSpendBaseUnits: lifetimeSpend,
   });
 
   if (policy.decision !== "auto_approve") {
@@ -166,16 +185,27 @@ export async function handleJudgePayInstruction(
   const recipient = normalizeAddress(instruction.address);
 
   const persisted = await deps.repo.transaction(async (tx) => {
-    // Re-check the daily cap inside the same transaction that persists the
-    // payout so concurrent judge payments cannot overshoot the daily cap.
-    const freshSpend = await tx.sumPayoutItemsByWorkspaceStates(
+    // Re-check every cap inside the same transaction that persists the payout
+    // so concurrent judge payments cannot overshoot daily/lifetime or per-user
+    // caps.
+    const freshDaily = await tx.sumPayoutItemsByWorkspaceStates(
       workspace.id,
       JUDGE_DAILY_SPEND_STATES,
       utcDayStartIso(),
     );
+    const freshLifetime = await tx.sumPayoutItemsByWorkspaceStates(
+      workspace.id,
+      JUDGE_DAILY_SPEND_STATES,
+      LIFETIME_START_ISO,
+    );
+    const freshSuccessfulByUser = await tx.countPayoutItemsByRequesterStates(
+      workspace.id,
+      user.userId,
+      JUDGE_SUCCESSFUL_STATES,
+    );
     const recheck = evaluateJudgeRequest({
       modeEnabled: config.enabled,
-      judgeUserIds: config.judgeUserIds,
+      adminUserIds: config.adminUserIds,
       userId: user.userId,
       amountBaseUnits,
       chainId: workspace.chain_id,
@@ -183,7 +213,11 @@ export async function handleJudgePayInstruction(
       workspaceActive: workspace.status === "active",
       perTxLimitBaseUnits: config.perTxLimitBaseUnits,
       dailyLimitBaseUnits: config.dailyLimitBaseUnits,
-      currentDailySpendBaseUnits: freshSpend,
+      lifetimeLimitBaseUnits: config.lifetimeLimitBaseUnits,
+      maxSuccessfulPaymentsPerUser: config.maxSuccessfulPaymentsPerUser,
+      successfulPaymentsByUser: freshSuccessfulByUser,
+      currentDailySpendBaseUnits: freshDaily,
+      lifetimeSpendBaseUnits: freshLifetime,
     });
     if (recheck.decision !== "auto_approve") {
       return { blocked: true, reason: recheck.reason, payoutId: null, itemId: null };
@@ -214,7 +248,7 @@ export async function handleJudgePayInstruction(
       eventType: "request_created",
       actorType: "judge",
       actorId: user.userId,
-      metadata: { source: "judge_telegram", channel: "telegram", mode: "judge" },
+      metadata: { source: "judge_telegram", channel: "telegram", mode: "judge", public: config.adminUserIds.size === 0 },
     });
     await tx.appendAuditEvent({
       workspaceId: workspace.id,
@@ -229,6 +263,7 @@ export async function handleJudgePayInstruction(
         reason: recheck.reason,
         perTxCapBaseUnits: config.perTxLimitBaseUnits,
         dailyCapBaseUnits: config.dailyLimitBaseUnits,
+        lifetimeCapBaseUnits: config.lifetimeLimitBaseUnits,
       },
     });
     return { blocked: false, reason: null, payoutId: payout.id, itemId: item.id };

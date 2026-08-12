@@ -43,9 +43,17 @@ async function main(): Promise<number> {
   // ── Judge config ───────────────────────────────────────────────────────
   const judge = getJudgeConfig();
   ok("JUDGE MODE", judge.enabled ? "ENABLED" : "DISABLED");
-  ok("JUDGE TELEGRAM IDS", judge.judgeUserIds.size > 0 ? judge.judgeUserIds.size + " configured" : "NONE");
+  ok(
+    "JUDGE ACCESS",
+    judge.adminUserIds.size === 0
+      ? "PUBLIC SELF-SERVE (any Telegram user under caps)"
+      : "ADMIN RESTRICTED (" + judge.adminUserIds.size + " admin(s), public locked down)",
+  );
+  ok("JUDGE ADMIN IDS", judge.adminUserIds.size > 0 ? judge.adminUserIds.size + " configured" : "none (public mode)");
   ok("JUDGE PER-TX CAP", baseUnitsToUsdc(BigInt(judge.perTxLimitBaseUnits)) + " USDC");
   ok("JUDGE DAILY CAP", baseUnitsToUsdc(BigInt(judge.dailyLimitBaseUnits)) + " USDC");
+  ok("JUDGE LIFETIME CAP", baseUnitsToUsdc(BigInt(judge.lifetimeLimitBaseUnits)) + " USDC");
+  ok("MAX SUCCESSFUL PER USER", String(judge.maxSuccessfulPaymentsPerUser));
   ok(
     "JUDGE INTEGRATION ID",
     judge.keeperhubJudgeIntegrationId
@@ -53,7 +61,6 @@ async function main(): Promise<number> {
       : "not configured (org wallet used)",
   );
   if (!judge.enabled) problem("JUDGE MODE", "disabled — set JUDGE_MODE_ENABLED=true to enable");
-  if (judge.judgeUserIds.size === 0) problem("JUDGE TELEGRAM IDS", "no allowlisted judge IDs configured");
   console.log("");
 
   // ── Database + judge workspace ─────────────────────────────────────────
@@ -105,6 +112,17 @@ async function main(): Promise<number> {
         ok(
           "TODAY'S JUDGE SPEND",
           baseUnitsToUsdc(BigInt(spend)) + " USDC of " + baseUnitsToUsdc(BigInt(judge.dailyLimitBaseUnits)) + " USDC cap",
+        );
+        const lifetimeSpend = await sql<{ total: string | null }[]>`
+          SELECT sum(pi.amount_base_units) AS total
+          FROM payout_items pi
+          JOIN payouts p ON p.id = pi.payout_id
+          WHERE p.workspace_id = ${w.id}
+            AND pi.status::text = ANY(${[...JUDGE_DAILY_SPEND_STATES] as string[]})
+        `;
+        ok(
+          "LIFETIME JUDGE SPEND",
+          baseUnitsToUsdc(BigInt(lifetimeSpend[0]?.total ?? "0")) + " USDC of " + baseUnitsToUsdc(BigInt(judge.lifetimeLimitBaseUnits)) + " USDC cap",
         );
       }
     } catch (error) {
@@ -159,7 +177,6 @@ async function main(): Promise<number> {
   console.log("");
   const ready =
     judge.enabled &&
-    judge.judgeUserIds.size > 0 &&
     problems.length === 0 &&
     keeperHubReady &&
     telegramOk;

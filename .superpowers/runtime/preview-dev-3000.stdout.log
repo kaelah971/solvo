@@ -74,3 +74,5 @@
  GET / 200 in 408ms (next.js: 142ms, application-code: 266ms)
  GET / 200 in 481ms (next.js: 112ms, application-code: 369ms)
  GET / 200 in 180ms (next.js: 7ms, application-code: 174ms)
+ GET /payments/new 404 in 4.1s (next.js: 3.3s, application-code: 739ms)
+ GET / 200 in 710ms (next.js: 359ms, application-code: 350ms)

@@ -155,6 +155,17 @@ export interface SolvoRepository {
     sinceIso: string,
   ): Promise<string>;
 
+  /**
+   * Counts payout items in a workspace that belong to one requester and are
+   * in any of the given states. Used by Judge Mode to enforce the per-user
+   * successful-execution cap.
+   */
+  countPayoutItemsByRequesterStates(
+    workspaceId: string,
+    requesterId: string,
+    statuses: readonly ExecutionState[],
+  ): Promise<number>;
+
   createExecutionAttempt(input: CreateExecutionAttemptInput): Promise<ExecutionAttemptRow>;
   updateExecutionAttempt(id: string, input: UpdateExecutionAttemptInput): Promise<ExecutionAttemptRow>;
   getLatestAttempt(payoutItemId: string): Promise<ExecutionAttemptRow | null>;
