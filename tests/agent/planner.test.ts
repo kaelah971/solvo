@@ -130,6 +130,25 @@ describe("agent planner — payment", () => {
     }
   });
 
+  it("carries the interpretation memo into the prepared payment", async () => {
+    const { decision } = await planFor("pay daniel 0.01 USDC for design work", ["daniel"]);
+    assert.equal(decision.decision, "prepared_payment");
+    if (decision.decision === "prepared_payment") {
+      assert.equal(decision.prepared.memo, "design work");
+      assert.equal(decision.prepared.amountBaseUnits, "10000");
+      assert.equal(decision.prepared.recipientAddress, ADDRESS_LOWER);
+      assert.equal(decision.prepared.approvalRequired, true);
+    }
+  });
+
+  it("prepares with memo null when the intent carries none", async () => {
+    const { decision } = await planFor("pay daniel 0.01 USDC", ["daniel"]);
+    assert.equal(decision.decision, "prepared_payment");
+    if (decision.decision === "prepared_payment") {
+      assert.equal(decision.prepared.memo, null);
+    }
+  });
+
   it("never executes for an unresolved alias: offers the claim path instead", async () => {
     const { decision } = await planFor("pay eve 0.01 USDC", []);
     assert.equal(decision.decision, "prepared_claim_link");

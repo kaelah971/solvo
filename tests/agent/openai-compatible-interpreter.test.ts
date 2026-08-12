@@ -290,6 +290,26 @@ describe("openai-compatible intent provider — structured output handling", () 
     await assertProviderError(interpreter.interpret(agentInput(), extraction()), "invalid_output", "empty summary");
   });
 
+  it("accepts a bounded provider memo within the schema cap", async () => {
+    const payload = modelOutput({ intent: { ...modelOutput().intent, memo: "design work" } });
+    const { interpreter } = makeProvider(() => jsonResponse(responsesBody(JSON.stringify(payload))));
+    const result = await interpreter.interpret(agentInput(), extraction());
+    assert.equal(result.intent.memo, "design work");
+    assert.equal(validateAgentInterpretation(result).ok, true);
+  });
+
+  it("rejects a provider memo longer than 140 characters (fail closed)", async () => {
+    const payload = modelOutput({ intent: { ...modelOutput().intent, memo: "a".repeat(141) } });
+    const { interpreter } = makeProvider(() => jsonResponse(responsesBody(JSON.stringify(payload))));
+    await assertProviderError(interpreter.interpret(agentInput(), extraction()), "invalid_output", "over-long memo");
+  });
+
+  it("rejects a provider memo containing secret-shaped content (fail closed)", async () => {
+    const payload = modelOutput({ intent: { ...modelOutput().intent, memo: "sk-evilsecretvalue123456" } });
+    const { interpreter } = makeProvider(() => jsonResponse(responsesBody(JSON.stringify(payload))));
+    await assertProviderError(interpreter.interpret(agentInput(), extraction()), "invalid_output", "secret memo");
+  });
+
   it("re-validates output with the local schema (test 14 contract)", async () => {
     const { interpreter } = makeProvider(() => jsonResponse(responsesBody(JSON.stringify(modelOutput({ intent: { ...modelOutput().intent, action: "status" } })))));
     await assertProviderError(interpreter.interpret(agentInput(), extraction()), "invalid_output", "action/intentKind mismatch");

@@ -1,3 +1,4 @@
+import { extractMemo } from "./extraction.ts";
 import type { ExtractionResult } from "./extraction.ts";
 import type { IntentInterpreter } from "./interpreter.ts";
 import type {
@@ -80,13 +81,19 @@ type IntentParts = {
   recipient: PaymentRecipient | null;
 };
 
-function baseIntent(action: AgentAction, parts: IntentParts, missingFields: MissingFieldKey[], candidates: PaymentCandidates): AgentInterpretation["intent"] {
+function baseIntent(
+  action: AgentAction,
+  parts: IntentParts,
+  missingFields: MissingFieldKey[],
+  candidates: PaymentCandidates,
+  memo: string | null = null,
+): AgentInterpretation["intent"] {
   return {
     action,
     amount: parts.amount?.raw ?? null,
     currency: parts.currency,
     recipient: parts.recipient,
-    memo: null,
+    memo,
     missingFields,
     candidates,
     source: "natural_language",
@@ -102,9 +109,13 @@ function payInterpretation(input: AgentInput, candidates: PaymentCandidates): Ag
   if (currency === null) missing.push("currency");
   if (recipient === null) missing.push("recipient");
 
+  // Display-only reason phrase: redacted and capped by extractMemo; never
+  // authoritative over amount, recipient, policy, approval, or execution.
+  const memo = extractMemo(input.rawText);
+
   if (missing.length > 0) {
     return {
-      intent: baseIntent("pay", { amount, currency, recipient }, missing, candidates),
+      intent: baseIntent("pay", { amount, currency, recipient }, missing, candidates, memo),
       intentKind: "clarify_missing_fields",
       summary: `Payment needs: ${missing.join(", ")}.`,
       provider: "static",
@@ -112,7 +123,7 @@ function payInterpretation(input: AgentInput, candidates: PaymentCandidates): Ag
   }
   const parts = { amount: amount as CandidateAmount, currency: currency as "USDC", recipient };
   return {
-    intent: baseIntent("pay", parts, [], candidates),
+    intent: baseIntent("pay", parts, [], candidates, memo),
     intentKind: "prepare_payment",
     summary: `Send ${parts.amount.raw} USDC to ${parts.recipient?.raw ?? "recipient"}.`,
     provider: "static",

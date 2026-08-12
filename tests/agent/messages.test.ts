@@ -134,6 +134,7 @@ describe("agent reply builders", () => {
         recipientAlias: "daniel",
         state: "pending_approval",
         approvalRequired: true,
+        memo: null,
         buttons: [
           { text: "APPROVE", callbackData: `approve:${PAYOUT_ID}` },
           { text: "REJECT", callbackData: `reject:${PAYOUT_ID}` },
@@ -164,6 +165,7 @@ describe("agent reply builders", () => {
         recipientAlias: "daniel",
         state: "pending_approval",
         approvalRequired: true,
+        memo: null,
         buttons: [],
       },
     };
@@ -174,6 +176,36 @@ describe("agent reply builders", () => {
     assert.equal(reply.text.includes("payment sent"), false);
     assert.equal(reply.text.includes("completed"), false);
     assertSafe(reply.text, "prepared payment gates");
+  });
+
+  it("prepared reply shows a safe memo line when a memo is provided", () => {
+    const result: AgentServiceResult = {
+      outcome: "prepared_payment",
+      prepared: {
+        outcome: "created",
+        payoutId: PAYOUT_ID,
+        itemId: "item-1",
+        amountBaseUnits: "10000",
+        recipientAddress: ADDRESS,
+        recipientAlias: "daniel",
+        state: "pending_approval",
+        approvalRequired: true,
+        memo: "design work",
+        buttons: [],
+      },
+    };
+    const reply = formatAgentServiceResult(result);
+    assert.match(reply.text, /memo/i);
+    assert.match(reply.text, /design work/i);
+    assertSafe(reply.text, "prepared payment memo");
+
+    const withoutMemo: AgentServiceResult = {
+      ...result,
+      prepared: { ...result.prepared, memo: null },
+    };
+    const reply2 = formatAgentServiceResult(withoutMemo);
+    assert.equal(reply2.text.includes("MEMO"), false);
+    assertSafe(reply2.text, "prepared payment without memo");
   });
 
   it("claim link copy explains the recipient wallet step and the exact-destination approval gate", () => {
@@ -232,6 +264,7 @@ describe("agent reply builders", () => {
         recipientAlias: null,
         state: "pending_approval",
         approvalRequired: true,
+        memo: null,
         buttons: [],
       },
     };
@@ -349,7 +382,7 @@ describe("agent reply builders", () => {
       { outcome: "needs_clarification", missingFields: ["amount"], question: "q" },
       {
         outcome: "prepared_payment",
-        prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: null, state: "pending_approval", approvalRequired: true, buttons: [] },
+        prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: null, state: "pending_approval", approvalRequired: true, memo: null, buttons: [] },
       },
       {
         outcome: "claim_link_created",
@@ -377,7 +410,7 @@ describe("agent reply builders", () => {
       { outcome: "needs_clarification", missingFields: ["amount", "recipient", "currency", "workspace", "payout_id"], question: "q" },
       {
         outcome: "prepared_payment",
-        prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: "daniel", state: "pending_approval", approvalRequired: true, buttons: [] },
+        prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: "daniel", state: "pending_approval", approvalRequired: true, memo: null, buttons: [] },
       },
       {
         outcome: "claim_link_created",
@@ -397,7 +430,7 @@ describe("agent reply builders", () => {
   it("never implies payment completion for prepared outcomes", () => {
     const prepared: AgentServiceResult = {
       outcome: "prepared_payment",
-      prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: null, state: "pending_approval", approvalRequired: true, buttons: [] },
+      prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: null, state: "pending_approval", approvalRequired: true, memo: null, buttons: [] },
     };
     const reply = formatAgentServiceResult(prepared);
     assert.equal(/\bpaid\b|completed|\bsent\b/.test(reply.text), false);
@@ -417,7 +450,7 @@ describe("agent reply builders", () => {
   it("is deterministic: repeated formatting deep-equals", () => {
     const result: AgentServiceResult = {
       outcome: "prepared_payment",
-      prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: "daniel", state: "pending_approval", approvalRequired: true, buttons: [] },
+      prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: "daniel", state: "pending_approval", approvalRequired: true, memo: null, buttons: [] },
     };
     const first = formatAgentServiceResult(result);
     const second = formatAgentServiceResult(result);

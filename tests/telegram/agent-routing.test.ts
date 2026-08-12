@@ -257,6 +257,26 @@ describe("agent telegram routing", () => {
     await assertNoExecution(repo);
   });
 
+  it("stores a conversation memo on the prepared payout item", async () => {
+    const repo = await makeFixture();
+    const reply = await handleAgentGroupText(
+      { user: user(), text: "pay blossom 0.01 USDC for design work" },
+      depsFor(repo),
+    );
+    assert.ok(reply);
+    assert.match(reply.text, /memo/i);
+    assert.match(reply.text, /design work/i);
+    const run = await repo.getAgentRunByIdempotencyKey("tg:-100777:m42:agent");
+    assert.ok(run);
+    const payout = await repo.getPayoutById(run.payout_id ?? "");
+    assert.equal(payout?.status, "pending_approval");
+    const items = await repo.getPayoutItemsByPayoutId(payout?.id ?? "");
+    assert.equal(items.length, 1);
+    assert.equal(items[0].memo, "design work");
+    assert.equal(repo.executionAttempts.size, 0);
+    await assertNoExecution(repo);
+  });
+
   it("asks for a recipient when the amount is present but no recipient is", async () => {
     const repo = await makeFixture();
     const reply = await handleAgentGroupText({ user: user(), text: "send 0.01 USDC" }, depsFor(repo));

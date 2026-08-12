@@ -9,6 +9,7 @@ import type {
   CandidateToken,
   PaymentCandidates,
 } from "./types.ts";
+import { redactAgentRawText } from "./redact.ts";
 
 /**
  * M8 — Deterministic candidate extraction.
@@ -475,4 +476,34 @@ export function extractCandidates(text: string, workspaceAliases: readonly strin
   }
 
   return { candidates, intentHints, unsafeFlags };
+}
+
+// ── Memo (display-only reason phrase) ───────────────────────────────────────
+
+/** Mirrors the intent schema's 140-char memo cap (schema.ts). */
+export const MAX_MEMO_CHARS = 140;
+
+/**
+ * Memo markers: "for", "memo", "note" (with optional colon) and the em dash.
+ * The LAST marker in the text wins, so the reason phrase is whatever follows
+ * the payment fields. Display-only and never authoritative: it can never
+ * affect amount, recipient, policy, approval, or execution.
+ */
+const MEMO_MARKER_PATTERN = /\b(?:for|memo|note)\b\s*:?|—/gi;
+
+/**
+ * Deterministic memo extraction: the trimmed text after the last marker,
+ * scrubbed of secret-shaped content and capped at the schema's 140 chars.
+ * Returns null when no marker or no content follows it. Pure and local —
+ * no I/O, no candidates involved.
+ */
+export function extractMemo(rawText: string): string | null {
+  const markers = [...rawText.matchAll(MEMO_MARKER_PATTERN)];
+  if (markers.length === 0) return null;
+  const last = markers[markers.length - 1];
+  const candidate = rawText.slice((last.index ?? 0) + last[0].length).trim();
+  if (candidate.length === 0) return null;
+  const redacted = redactAgentRawText(candidate);
+  const memo = redacted.length > MAX_MEMO_CHARS ? redacted.slice(0, MAX_MEMO_CHARS) : redacted;
+  return memo.length === 0 ? null : memo;
 }

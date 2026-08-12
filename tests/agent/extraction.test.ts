@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { validatePaymentCandidates } from "../../src/server/agent/schema.ts";
-import { extractCandidates, type ExtractionResult } from "../../src/server/agent/extraction.ts";
+import { extractCandidates, extractMemo, type ExtractionResult } from "../../src/server/agent/extraction.ts";
 
 const VALID_ADDRESS = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e";
 const VALID_ADDRESS_LOWER = VALID_ADDRESS.toLowerCase();
@@ -256,5 +256,48 @@ describe("agent candidate extraction", () => {
       result.candidates.amounts.map((c) => c.raw),
       ["1"],
     );
+  });
+});
+
+describe("agent memo extraction", () => {
+  it("captures the reason after 'for'", () => {
+    assert.equal(extractMemo("Pay blossom 0.01 USDC for design work"), "design work");
+    assert.equal(extractMemo("Send 0.01 USDC to 0x742d35cc6634c0532925a3b844bc454e4438f44e for contributor reward"), "contributor reward");
+    assert.equal(extractMemo("Reimburse endurance 0.02 USDC for gas"), "gas");
+  });
+
+  it("captures the reason after 'memo' and 'note'", () => {
+    assert.equal(extractMemo("Pay blossom 0.01 USDC memo design bounty"), "design bounty");
+    assert.equal(extractMemo("Pay blossom 0.01 USDC note design bounty"), "design bounty");
+  });
+
+  it("captures the reason after an em dash", () => {
+    assert.equal(extractMemo("Pay blossom 0.01 USDC \u2014 design bounty"), "design bounty");
+  });
+
+  it("returns null when no marker or no content follows it", () => {
+    assert.equal(extractMemo("pay blossom 0.01 USDC"), null);
+    assert.equal(extractMemo("pay blossom for"), null);
+    assert.equal(extractMemo(""), null);
+    assert.equal(extractMemo("for"), null);
+  });
+
+  it("uses the last marker so the trailing phrase is the memo", () => {
+    assert.equal(extractMemo("Pay blossom 0.01 USDC for design work for the weekend"), "the weekend");
+  });
+
+  it("truncates long memos deterministically to 140 characters", () => {
+    const long = "for " + "a".repeat(200);
+    const memo = extractMemo(long);
+    assert.ok(memo !== null);
+    assert.equal(memo.length, 140);
+  });
+
+  it("redacts secret-shaped content from the memo", () => {
+    const memo = extractMemo("pay 0.01 USDC for work with sk-evilsecretvalue123456 and kh_fake_org_key_123456");
+    assert.ok(memo);
+    assert.equal(memo.includes("sk-evilsecretvalue123456"), false);
+    assert.equal(memo.includes("kh_fake_org_key_123456"), false);
+    assert.equal(memo.includes("[REDACTED]"), true);
   });
 });

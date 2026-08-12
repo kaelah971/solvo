@@ -99,6 +99,15 @@ describe("prepare-payment bridge", () => {
     assert.equal(items[0].amount_base_units, "10000");
     assert.equal(items[0].memo, "for design work");
     assert.equal(result.itemId, items[0].id);
+    assert.equal(result.memo, "for design work");
+  });
+
+  it("persists memo null on the payout item when no memo is provided", async () => {
+    const fixture = await makeFixture();
+    const result = await bridgePreparedPayment(inputFor(fixture, preparedDecision({ memo: null })), { repo: fixture.repo });
+    const items = await fixture.repo.getPayoutItemsByPayoutId(result.payoutId);
+    assert.equal(items[0].memo, null);
+    assert.equal(result.memo, null);
   });
 
   it("marks the payout as approval-required without approving", async () => {

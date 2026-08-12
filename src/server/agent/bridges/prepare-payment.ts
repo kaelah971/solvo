@@ -34,6 +34,8 @@ export type PreparePaymentBridgeResult = {
   amountBaseUnits: string;
   recipientAddress: string;
   recipientAlias: string | null;
+  /** Sanitized user-supplied reason; display-only, never authoritative. */
+  memo: string | null;
   state: string;
   approvalRequired: boolean;
   buttons: Array<{ text: string; callbackData: string }>;
@@ -180,6 +182,7 @@ export async function bridgePreparedPayment(
     amountBaseUnits: prepared.amountBaseUnits,
     recipientAddress: prepared.recipientAddress,
     recipientAlias: prepared.recipientAlias,
+    memo: prepared.memo,
     state: persisted.payout.status,
     approvalRequired: true,
     buttons: [

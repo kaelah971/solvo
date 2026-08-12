@@ -118,18 +118,23 @@ function preparedPaymentMessage(result: Extract<AgentServiceResult, { outcome: "
     prepared.recipientAlias !== null
       ? `${prepared.recipientAlias} (${prepared.recipientAddress})`
       : prepared.recipientAddress;
-  const text = [
+  const lines = [
     "PAYMENT REQUEST PREPARED",
     "",
     `AMOUNT       ${baseUnitsToUsdc(prepared.amountBaseUnits)} USDC`,
     `RECIPIENT    ${recipientLabel}`,
     "STATUS       APPROVAL REQUIRED",
+  ];
+  if (prepared.memo !== null && prepared.memo.length > 0) {
+    lines.push(`MEMO         ${prepared.memo}`);
+  }
+  lines.push(
     "",
     "No funds have moved.",
     "An owner or approver must approve before anything executes.",
     "KeeperHub execution happens only after approval.",
-  ].join("\n");
-  return { text, buttons: prepared.buttons };
+  );
+  return { text: lines.join("\n"), buttons: prepared.buttons };
 }
 
 function claimLinkMessage(result: Extract<AgentServiceResult, { outcome: "claim_link_created" }>): AgentFormattedReply {
