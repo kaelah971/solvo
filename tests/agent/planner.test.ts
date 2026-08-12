@@ -92,6 +92,7 @@ const PAYMENT_BASE: PaymentIntent = {
   missingFields: [],
   candidates: candidatesFor("0.01"),
   source: "natural_language",
+  batch: null,
 };
 
 function craftedInterpretation(intent: PaymentIntent, intentKind: AgentInterpretation["intentKind"] = "prepare_payment"): AgentInterpretation {

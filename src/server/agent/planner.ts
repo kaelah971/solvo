@@ -92,6 +92,15 @@ export class AgentPlanner {
         return this.clarify(interpretation.intent.missingFields);
       case "unsupported":
         return { decision: "unsupported", planAction: "decline_unsupported", reason: interpretation.summary };
+      case "prepare_batch_payment":
+        // M10.3: the parser recognizes batch intent; planning/persistence
+        // lands in M10.4/M10.5. Until then the planner fails safe with no
+        // payout or claim artifacts.
+        return {
+          decision: "unsupported",
+          planAction: "decline_unsupported",
+          reason: "Batch payments are not wired yet.",
+        };
     }
   }
 

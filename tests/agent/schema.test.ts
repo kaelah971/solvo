@@ -72,6 +72,7 @@ function validIntent(): PaymentIntent {
     missingFields: [],
     candidates: validCandidates(),
     source: "natural_language",
+    batch: null,
   };
 }
 
@@ -541,8 +542,8 @@ describe("agent schema contracts", () => {
 
   describe("bounded vocabularies", () => {
     it("exposes bounded action, intent and plan vocabularies", () => {
-      assert.deepEqual(AGENT_ACTIONS, ["pay", "claim_pay", "status", "unknown"]);
-      assert.deepEqual(AGENT_INTENT_KINDS, ["prepare_payment", "create_claim_link", "inspect_payment_status", "clarify_missing_fields", "unsupported"]);
+      assert.deepEqual(AGENT_ACTIONS, ["pay", "claim_pay", "status", "unknown", "batch_pay"]);
+      assert.deepEqual(AGENT_INTENT_KINDS, ["prepare_payment", "create_claim_link", "inspect_payment_status", "clarify_missing_fields", "unsupported", "prepare_batch_payment"]);
       assert.deepEqual(AGENT_PLAN_ACTIONS, ["ask_clarifying_question", "prepare_payment", "create_claim_link", "inspect_payment_status", "decline_unsupported"]);
     });
 

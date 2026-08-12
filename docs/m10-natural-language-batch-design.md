@@ -363,6 +363,25 @@ updated **in the same commit** that implements the behavior.
 | Message-length abuse (huge recipient lists) | NL cap 10 recipients + existing input-length cap |
 | Claim-batch scope creep | Explicitly deferred to M11/M10.x with no mixed decision shape |
 
+## M10.3 parser (implemented)
+
+- **Deterministic parser implemented for G1/G2/G3** in
+  `src/server/agent/extraction.ts` (`parseBatchPayment`), wired into the
+  static interpreter as a new `batch_pay` action / `prepare_batch_payment`
+  intent kind with a schema-validated `PaymentIntent.batch` candidate
+  (mode, recipients with per-leg base units, total, USDC, Base chain,
+  sanitized memo).
+- **Parser only recognizes intent — no payout persistence yet.** The
+  planner returns `unsupported` ("Batch payments are not wired yet.") with
+  zero artifacts until M10.4/M10.5.
+- Parser constraints locked by tests: all-recipients-resolve-or-clarify,
+  non-divisible splits clarify (never round), duplicate rejection, ≤10
+  recipients, malformed decimals (`.01`, `0,01`) never parsed, hostile
+  markers and unsupported tokens/chains override everything, and the M9
+  hazard forms stay clarification.
+- Known deferred forms remain deferred (CSV, group/role words, "top three
+  winners", percentages, claim-link batches, Judge Mode batch).
+
 ## M10.2 baseline (locked before implementation)
 
 - **Batch grammar is documented but not implemented yet.** All 53 corpus

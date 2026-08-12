@@ -1,4 +1,4 @@
-import { extractMemo } from "./extraction.ts";
+import { extractMemo, parseBatchPayment } from "./extraction.ts";
 import type { ExtractionResult } from "./extraction.ts";
 import type { IntentInterpreter } from "./interpreter.ts";
 import type {
@@ -55,6 +55,20 @@ export function interpretStatically(input: AgentInput, extraction: ExtractionRes
     return unsupportedInterpretation(candidates, "Unsupported token or chain.");
   }
 
+  // M10 batch recognition (intent only — the planner decides in M10.4).
+  const batch = parseBatchPayment(input.rawText, input.workspace?.aliases ?? []);
+  if (batch.status === "batch") {
+    return batchPaymentInterpretation(batch, candidates, input);
+  }
+  if (batch.status === "clarify") {
+    return {
+      intent: baseIntent("batch_pay", { amount: null, currency: null, recipient: null }, batch.missingFields, candidates),
+      intentKind: "clarify_missing_fields",
+      summary: `Batch needs: ${batch.missingFields.join(", ")}.`,
+      provider: "static",
+    };
+  }
+
   const hints = [...new Set(intentHints)];
   if (hints.length > 1) {
     return unsupportedInterpretation(candidates, "Multiple actions in one instruction.");
@@ -71,6 +85,59 @@ export function interpretStatically(input: AgentInput, extraction: ExtractionRes
     default:
       return unsupportedInterpretation(candidates, "I could not interpret that instruction.");
   }
+}
+
+/**
+ * Builds the parsed M10 batch intent. Amounts are canonical base units from
+ * the deterministic parser; addresses are carried for explicit 0x legs and
+ * null for alias legs (the planner resolves them in M10.4). The currency
+ * defaults to USDC only when the Base workspace supports it — otherwise the
+ * intent is a currency clarification (fail closed, never a mixed token).
+ */
+function batchPaymentInterpretation(
+  batch: Extract<ReturnType<typeof parseBatchPayment>, { status: "batch" }>,
+  candidates: PaymentCandidates,
+  input: AgentInput,
+): AgentInterpretation {
+  const hasUsdc = candidates.tokens.some((candidate) => candidate.validationStatus === "valid");
+  const baseWorkspace = input.workspace !== null && input.workspace.chainId === BASE_CHAIN_ID;
+  if (!hasUsdc && !baseWorkspace) {
+    return {
+      intent: baseIntent("batch_pay", { amount: null, currency: null, recipient: null }, ["currency"], candidates),
+      intentKind: "clarify_missing_fields",
+      summary: "Batch needs: currency.",
+      provider: "static",
+    };
+  }
+  const intent: AgentInterpretation["intent"] = {
+    action: "batch_pay",
+    amount: null,
+    currency: "USDC",
+    recipient: null,
+    memo: null,
+    missingFields: [],
+    batch: {
+      mode: batch.mode,
+      recipients: batch.recipients.map((recipient, index) => ({
+        label: recipient.label,
+        address: recipient.address,
+        amountBaseUnits: batch.amountsBaseUnits[index],
+        memo: null,
+      })),
+      totalAmountBaseUnits: batch.totalAmountBaseUnits,
+      currency: "USDC",
+      chainId: BASE_CHAIN_ID,
+      memo: batch.memo,
+    },
+    candidates,
+    source: "natural_language",
+  };
+  return {
+    intent,
+    intentKind: "prepare_batch_payment",
+    summary: `Batch payment for ${batch.recipients.length} recipients.`,
+    provider: "static",
+  };
 }
 
 // ── Intent builders ────────────────────────────────────────────────────────
@@ -97,6 +164,7 @@ function baseIntent(
     missingFields,
     candidates,
     source: "natural_language",
+    batch: null,
   };
 }
 

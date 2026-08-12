@@ -47,6 +47,7 @@ export function safeInterpretation(raw: unknown): AgentInterpretation {
       missingFields: [],
       candidates: EMPTY_CANDIDATES,
       source: "natural_language",
+      batch: null,
     },
     intentKind: "unsupported",
     summary: "The interpreter returned an invalid result.",

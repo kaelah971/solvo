@@ -132,6 +132,12 @@ describe("M9 real-world corpus — Telegram routing layer", () => {
           assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0, phrase.id);
           break;
         }
+        case "batch_parsed": {
+          assert.match(reply.text, /couldn't safely|blocked|one more detail/i, phrase.id);
+          assert.equal(await repo.getPayoutItemByIdempotencyKey("ag:tg:-100777:m1:agent:prepare"), null, phrase.id);
+          assert.equal((await repo.listClaimsByWorkspace(workspace.id)).length, 0, phrase.id);
+          break;
+        }
       }
       await assertNoExecution(repo);
       checked += 1;

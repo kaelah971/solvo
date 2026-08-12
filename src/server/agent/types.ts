@@ -55,11 +55,13 @@ export type AgentInputFlags = {
 
 /**
  * External action vocabulary (plan §3). Maps 1:1 to a bounded intent kind via
- * `classifyAgentAction`. No execution action exists here.
+ * `classifyAgentAction`. No execution action exists here. `batch_pay` is the
+ * M10 multi-recipient action: it only ever proposes a pending-approval batch
+ * payout (the planner/bridge own the actual preparation).
  */
-export type AgentAction = "pay" | "claim_pay" | "status" | "unknown";
+export type AgentAction = "pay" | "claim_pay" | "status" | "unknown" | "batch_pay";
 
-export const AGENT_ACTIONS: readonly AgentAction[] = ["pay", "claim_pay", "status", "unknown"];
+export const AGENT_ACTIONS: readonly AgentAction[] = ["pay", "claim_pay", "status", "unknown", "batch_pay"];
 
 export function isAgentAction(value: unknown): value is AgentAction {
   return (AGENT_ACTIONS as readonly unknown[]).includes(value);
@@ -68,14 +70,16 @@ export function isAgentAction(value: unknown): value is AgentAction {
 /**
  * Bounded internal intent classification. `clarify_missing_fields` is a
  * planner-stage intent (produced as ask_clarifying_question); interpretation
- * in S1 yields one of the other four via `classifyAgentAction`.
+ * in S1 yields one of the other four via `classifyAgentAction`. M10 adds
+ * `prepare_batch_payment` for parsed multi-recipient intents.
  */
 export type AgentIntentKind =
   | "prepare_payment"
   | "create_claim_link"
   | "inspect_payment_status"
   | "clarify_missing_fields"
-  | "unsupported";
+  | "unsupported"
+  | "prepare_batch_payment";
 
 export const AGENT_INTENT_KINDS: readonly AgentIntentKind[] = [
   "prepare_payment",
@@ -83,6 +87,7 @@ export const AGENT_INTENT_KINDS: readonly AgentIntentKind[] = [
   "inspect_payment_status",
   "clarify_missing_fields",
   "unsupported",
+  "prepare_batch_payment",
 ];
 
 export function isAgentIntentKind(value: unknown): value is AgentIntentKind {
@@ -99,6 +104,8 @@ export function classifyAgentAction(action: AgentAction): AgentIntentKind {
       return "inspect_payment_status";
     case "unknown":
       return "unsupported";
+    case "batch_pay":
+      return "prepare_batch_payment";
   }
 }
 
@@ -178,12 +185,54 @@ export const MISSING_FIELD_KEYS: readonly MissingFieldKey[] = [
   "payout_id",
 ];
 
+// ── M10 batch payment candidates (parsed, never authoritative) ─────────────
+
+export type BatchPaymentMode = "uniform_each" | "split_equal" | "explicit_amounts";
+
+export const BATCH_PAYMENT_MODES: readonly BatchPaymentMode[] = [
+  "uniform_each",
+  "split_equal",
+  "explicit_amounts",
+];
+
+/**
+ * One parsed batch leg. `address` is set only for explicit 0x recipients;
+ * alias recipients carry `address: null` and are resolved deterministically
+ * by the planner (M10.4) against the workspace recipient directory. Amounts
+ * are canonical integer base units (6-decimal USDC).
+ */
+export type BatchRecipientCandidate = {
+  /** Alias (lowercase) or verbatim address surface form. */
+  label: string;
+  /** Normalized EVM address when the leg was an explicit 0x address. */
+  address: string | null;
+  /** Deterministic integer base units for this leg. */
+  amountBaseUnits: string;
+  memo: string | null;
+};
+
+/**
+ * Deterministically parsed batch intent (M10 v1 grammar: uniform "each",
+ * equal "split", explicit per-recipient amounts). Display/proposal data only:
+ * it can never approve, execute, or touch KeeperHub. The planner re-resolves
+ * every recipient and re-runs policy before anything is persisted.
+ */
+export type BatchPaymentCandidate = {
+  mode: BatchPaymentMode;
+  recipients: BatchRecipientCandidate[];
+  totalAmountBaseUnits: string;
+  currency: "USDC";
+  chainId: string;
+  /** Optional sanitized batch reason (≤140 chars, redacted). */
+  memo: string | null;
+};
+
 export type PaymentIntent = {
   action: AgentAction;
   /**
    * Deterministically selected amount TEXT. Provenance-bound: must equal a
    * candidate raw/normalized value. Never executed directly — the planner
-   * re-derives authoritative integer base units.
+   * re-derives authoritative integer base units. Null for batch intents.
    */
   amount: string | null;
   /** "USDC" only; anything else fails closed. */
@@ -195,6 +244,8 @@ export type PaymentIntent = {
   /** The candidate set the interpreter was allowed to select from. */
   candidates: PaymentCandidates;
   source: "natural_language";
+  /** Parsed M10 batch intent; null unless `action === "batch_pay"`. */
+  batch: BatchPaymentCandidate | null;
 };
 
 /**

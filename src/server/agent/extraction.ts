@@ -7,6 +7,7 @@ import type {
   CandidateClaimAmount,
   CandidatePayoutId,
   CandidateToken,
+  MissingFieldKey,
   PaymentCandidates,
 } from "./types.ts";
 import { redactAgentRawText } from "./redact.ts";
@@ -613,4 +614,268 @@ export function extractMemo(rawText: string): string | null {
   const redacted = redactAgentRawText(candidate);
   const memo = redacted.length > MAX_MEMO_CHARS ? redacted.slice(0, MAX_MEMO_CHARS) : redacted;
   return memo.length === 0 ? null : memo;
+}
+
+// ── M10 batch parsing (intent recognition only — no persistence) ───────────
+
+export type BatchRecipientParse = {
+  label: string;
+  address: string | null;
+  /** True when an alias is not in the workspace registry. */
+  unresolved: boolean;
+};
+
+export type BatchParseOutcome =
+  | {
+      status: "batch";
+      mode: "uniform_each" | "split_equal" | "explicit_amounts";
+      recipients: BatchRecipientParse[];
+      /** Per-recipient base units, aligned with `recipients`. */
+      amountsBaseUnits: string[];
+      totalAmountBaseUnits: string;
+      memo: string | null;
+    }
+  | { status: "clarify"; missingFields: MissingFieldKey[] }
+  | { status: "none" };
+
+const MAX_BATCH_RECIPIENTS = 10;
+const BATCH_SPLIT_WORDS = new Set(["split", "divide"]);
+const BATCH_BETWEEN_WORDS = new Set(["between", "among"]);
+
+function isNameItem(item: Item): boolean {
+  return item.klass === "word" || item.klass === "address";
+}
+
+/** "and"/"or" are stopword-classified in the scanner. */
+function isBatchSeparator(item: Item): boolean {
+  return (item.klass === "word" || item.klass === "stopword") && (item.lower === "and" || item.lower === "or");
+}
+
+function batchRecipientFor(item: Item, registry: ReadonlySet<string>): BatchRecipientParse {
+  if (item.klass === "address") {
+    return { label: item.raw, address: item.lower, unresolved: false };
+  }
+  return { label: item.lower, address: null, unresolved: !registry.has(item.lower) };
+}
+
+/**
+ * Parses a recipient name sequence starting at `start`: names separated by
+ * "and"/"or" words or by comma/ampersand/slash gaps. Stops at the first
+ * non-name, non-separator item. Never resolves addresses — it only reports
+ * which names are registry aliases.
+ */
+function parseBatchNames(
+  items: Item[],
+  start: number,
+  registry: ReadonlySet<string>,
+  text: string,
+): { recipients: BatchRecipientParse[]; end: number } {
+  const recipients: BatchRecipientParse[] = [];
+  let i = start;
+  while (i < items.length) {
+    const item = items[i];
+    if (!isNameItem(item)) break;
+    recipients.push(batchRecipientFor(item, registry));
+    i += 1;
+    const next = items[i];
+    if (next === undefined) break;
+    if (isBatchSeparator(next)) {
+      i += 1;
+      continue;
+    }
+    if (isNameItem(next)) {
+      const gap = text.slice(item.index + item.raw.length, next.index);
+      if (/[,&/]/.test(gap)) continue;
+    }
+    break;
+  }
+  return { recipients, end: i };
+}
+
+/** True when every recipient resolves (registry alias or explicit address). */
+function batchAllResolved(recipients: readonly BatchRecipientParse[]): boolean {
+  return recipients.every((recipient) => !recipient.unresolved);
+}
+
+function batchHasDuplicates(recipients: readonly BatchRecipientParse[]): boolean {
+  const seen = new Set<string>();
+  for (const recipient of recipients) {
+    const key = recipient.address ?? recipient.label;
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
+}
+
+function batchAmountToBaseUnits(raw: string): string | null {
+  const canonical = canonicalizeAmountLocal(raw);
+  if (canonical === "invalid" || canonical === "0") return null;
+  return usdcToBaseUnitsLocal(canonical);
+}
+
+/** Numbers after a dot/comma/sign are malformed decimal fragments — never parsed. */
+function batchNumberMalformed(item: Item, text: string): boolean {
+  const previousChar = item.index > 0 ? text[item.index - 1] : "";
+  return previousChar === "." || previousChar === "," || previousChar === "-" || previousChar === "+";
+}
+
+/**
+ * Deterministic M10 v1 batch intent recognition. Recognizes ONLY the
+ * explicit grammar (G1 "each", G2 "split/divide … between/among", G3
+ * per-recipient amount pairs). Everything else returns "none" so the
+ * caller's existing single-recipient/ambiguity logic applies unchanged —
+ * a multi-recipient phrase can never become a single-recipient payment.
+ */
+export function parseBatchPayment(text: string, aliases: readonly string[]): BatchParseOutcome {
+  const registry = new Set(aliases.map((alias) => alias.toLowerCase()));
+  const items = scanItems(text);
+  if (items.length === 0) return { status: "none" };
+
+  const verbIdx = items.findIndex((item) => item.klass === "verb_pay");
+  const eachIdx = items.findIndex((item) => item.klass === "word" && item.lower === "each");
+  const splitIdx = items.findIndex((item) => item.klass === "word" && BATCH_SPLIT_WORDS.has(item.lower));
+
+  // G2 — split/divide <total> USDC [equally] between/among <names>
+  if (splitIdx >= 0 && verbIdx < 0) {
+    const number = items[splitIdx + 1];
+    if (number === undefined || number.klass !== "number") return { status: "none" };
+    if (batchNumberMalformed(number, text)) return { status: "clarify", missingFields: ["amount"] };
+    const total = batchAmountToBaseUnits(number.raw);
+    if (total === null) return { status: "clarify", missingFields: ["amount"] };
+    let betweenIdx = splitIdx + 1;
+    while (betweenIdx < items.length) {
+      const item = items[betweenIdx];
+      if (item.klass === "word" && BATCH_BETWEEN_WORDS.has(item.lower)) break;
+      betweenIdx += 1;
+    }
+    if (betweenIdx >= items.length) return { status: "none" };
+    const { recipients } = parseBatchNames(items, betweenIdx + 1, registry, text);
+    if (recipients.length < 2) return { status: "none" };
+    if (recipients.length > MAX_BATCH_RECIPIENTS) return { status: "clarify", missingFields: ["recipient"] };
+    if (!batchAllResolved(recipients)) return { status: "clarify", missingFields: ["recipient"] };
+    if (batchHasDuplicates(recipients)) return { status: "clarify", missingFields: ["recipient"] };
+    const totalUnits = BigInt(total);
+    if (totalUnits % BigInt(recipients.length) !== 0n) {
+      return { status: "clarify", missingFields: ["amount"] };
+    }
+    const perRecipient = (totalUnits / BigInt(recipients.length)).toString();
+    return {
+      status: "batch",
+      mode: "split_equal",
+      recipients,
+      amountsBaseUnits: recipients.map(() => perRecipient),
+      totalAmountBaseUnits: total,
+      memo: extractMemo(text),
+    };
+  }
+
+  // G1 — <verb> <names> <amount> USDC each | <verb> <amount> USDC each to <names>
+  if (eachIdx >= 0 && verbIdx >= 0) {
+    const allNumbers = items.filter((item) => item.klass === "number");
+    const numbers = allNumbers.filter((item) => !batchNumberMalformed(item, text));
+    if (allNumbers.length > 0 && numbers.length === 0) {
+      return { status: "clarify", missingFields: ["amount"] };
+    }
+    if (numbers.length !== 1) return { status: "none" };
+    const amount = batchAmountToBaseUnits(numbers[0].raw);
+    if (amount === null) return { status: "clarify", missingFields: ["amount"] };
+    const numberIdx = items.indexOf(numbers[0]);
+    let recipients: BatchRecipientParse[] = [];
+    if (numberIdx > verbIdx + 1) {
+      const before = parseBatchNames(items, verbIdx + 1, registry, text);
+      if (before.end === numberIdx) recipients = before.recipients;
+    }
+    if (recipients.length === 0) {
+      const toIdx = items.findIndex((item, index) => index > eachIdx && item.klass === "to");
+      if (toIdx >= 0) {
+        recipients = parseBatchNames(items, toIdx + 1, registry, text).recipients;
+      }
+    }
+    if (recipients.length < 2) return { status: "none" };
+    if (recipients.length > MAX_BATCH_RECIPIENTS) return { status: "clarify", missingFields: ["recipient"] };
+    if (!batchAllResolved(recipients)) return { status: "clarify", missingFields: ["recipient"] };
+    if (batchHasDuplicates(recipients)) return { status: "clarify", missingFields: ["recipient"] };
+    return {
+      status: "batch",
+      mode: "uniform_each",
+      recipients,
+      amountsBaseUnits: recipients.map(() => amount),
+      totalAmountBaseUnits: (BigInt(amount) * BigInt(recipients.length)).toString(),
+      memo: extractMemo(text),
+    };
+  }
+
+  // G3 — <verb> <name> <amount> [USDC] (and|,) <name> <amount> [USDC] …
+  //       <verb> <amount> [USDC] to <name> (and|,) <amount> [USDC] to <name> …
+  if (verbIdx >= 0) {
+    const recipients: BatchRecipientParse[] = [];
+    const amounts: string[] = [];
+    let i = verbIdx + 1;
+    let ok = true;
+    while (i < items.length) {
+      const item = items[i];
+      if (isBatchSeparator(item)) {
+        i += 1;
+        continue;
+      }
+      if (isNameItem(item)) {
+        recipients.push(batchRecipientFor(item, registry));
+        i += 1;
+        const number = items[i];
+        if (number === undefined || number.klass !== "number" || batchNumberMalformed(number, text)) {
+          ok = false;
+          break;
+        }
+        amounts.push(number.raw);
+        i += 1;
+        if (items[i] !== undefined && items[i].klass === "token") i += 1;
+        continue;
+      }
+      if (item.klass === "number") {
+        if (batchNumberMalformed(item, text)) {
+          ok = false;
+          break;
+        }
+        amounts.push(item.raw);
+        i += 1;
+        if (items[i] !== undefined && items[i].klass === "token") i += 1;
+        const to = items[i];
+        if (to === undefined || to.klass !== "to") {
+          ok = false;
+          break;
+        }
+        i += 1;
+        const name = items[i];
+        if (name === undefined || !isNameItem(name)) {
+          ok = false;
+          break;
+        }
+        recipients.push(batchRecipientFor(name, registry));
+        i += 1;
+        continue;
+      }
+      break;
+    }
+    if (!ok || recipients.length < 2) return { status: "none" };
+    if (recipients.length > MAX_BATCH_RECIPIENTS) return { status: "clarify", missingFields: ["recipient"] };
+    const amountsBaseUnits: string[] = [];
+    for (const raw of amounts) {
+      const units = batchAmountToBaseUnits(raw);
+      if (units === null) return { status: "clarify", missingFields: ["amount"] };
+      amountsBaseUnits.push(units);
+    }
+    if (!batchAllResolved(recipients)) return { status: "clarify", missingFields: ["recipient"] };
+    if (batchHasDuplicates(recipients)) return { status: "clarify", missingFields: ["recipient"] };
+    const total = amountsBaseUnits.reduce((sum, units) => sum + BigInt(units), 0n);
+    return {
+      status: "batch",
+      mode: "explicit_amounts",
+      recipients,
+      amountsBaseUnits,
+      totalAmountBaseUnits: total.toString(),
+      memo: extractMemo(text),
+    };
+  }
+
+  return { status: "none" };
 }

@@ -77,6 +77,7 @@ const INTERPRETER_LEVEL: ReadonlySet<AgentPhraseExpectation> = new Set([
   "unsupported",
   "blocked",
   "status_not_found",
+  "batch_parsed",
 ]);
 
 describe("M9 real-world corpus — interpreter layer", () => {
@@ -158,6 +159,8 @@ function interpreterIntentKind(expectation: AgentPhraseExpectation): AgentInterp
       return "unsupported";
     case "status_not_found":
       return "inspect_payment_status";
+    case "batch_parsed":
+      return "prepare_batch_payment";
     case "inert":
       throw new Error("inert phrases are not interpreter-level");
   }
@@ -177,6 +180,8 @@ function plannerDecisionMatches(decision: string, expectation: AgentPhraseExpect
       return decision === "blocked";
     case "status_not_found":
       return decision === "status_not_found";
+    case "batch_parsed":
+      return decision === "unsupported" || decision === "blocked";
     case "inert":
       return false;
   }

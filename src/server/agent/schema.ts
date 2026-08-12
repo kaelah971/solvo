@@ -8,6 +8,7 @@ import {
   type AgentInterpretation,
   type AgentPlan,
   type AgentResult,
+  type BatchPaymentCandidate,
   type CandidateSourceField,
   type CandidateValidationStatus,
   type PaymentCandidates,
@@ -185,9 +186,61 @@ function aliasIsFromCandidates(alias: string, candidates: PaymentCandidates): bo
   );
 }
 
+// ── M10 batch candidate ────────────────────────────────────────────────────
+
+const BATCH_KEYS = ["mode", "recipients", "totalAmountBaseUnits", "currency", "chainId", "memo"] as const;
+const BATCH_RECIPIENT_KEYS = ["label", "address", "amountBaseUnits", "memo"] as const;
+const BATCH_MODES = ["uniform_each", "split_equal", "explicit_amounts"] as const;
+const MAX_BATCH_RECIPIENTS = 10;
+
+function validateBatchRecipient(raw: unknown): ValidationResult<unknown> {
+  if (!isRecord(raw)) return fail("intent.batch.recipients: entry must be an object");
+  if (!hasOnlyKeys(raw, BATCH_RECIPIENT_KEYS)) return fail("intent.batch.recipients: entry has unknown keys");
+  if (!isString(raw.label) || raw.label.length === 0) return fail("intent.batch.recipients: label required");
+  if (raw.address !== null && (!isString(raw.address) || !HEX_ADDRESS_PATTERN.test(raw.address))) {
+    return fail("intent.batch.recipients: address must be a 40-hex 0x address or null");
+  }
+  if (!isWellFormedBaseUnits(raw.amountBaseUnits)) {
+    return fail("intent.batch.recipients: amountBaseUnits must be positive integer base units");
+  }
+  if (raw.memo !== null && (!isString(raw.memo) || raw.memo.length > MEMO_MAX_LENGTH)) {
+    return fail(`intent.batch.recipients: memo must be a string of at most ${MEMO_MAX_LENGTH} characters or null`);
+  }
+  return ok(raw);
+}
+
+export function validateBatchCandidate(raw: unknown): ValidationResult<BatchPaymentCandidate> {
+  if (!isRecord(raw)) return fail("intent.batch: must be an object");
+  if (!hasOnlyKeys(raw, BATCH_KEYS)) return fail("intent.batch: has unknown keys");
+  if (!(BATCH_MODES as readonly unknown[]).includes(raw.mode)) {
+    return fail("intent.batch.mode: must be uniform_each, split_equal or explicit_amounts");
+  }
+  if (!Array.isArray(raw.recipients) || raw.recipients.length === 0 || raw.recipients.length > MAX_BATCH_RECIPIENTS) {
+    return fail(`intent.batch.recipients: must be 1-${MAX_BATCH_RECIPIENTS} entries`);
+  }
+  for (const entry of raw.recipients) {
+    const result = validateBatchRecipient(entry);
+    if (!result.ok) return result;
+  }
+  if (!isWellFormedBaseUnits(raw.totalAmountBaseUnits)) {
+    return fail("intent.batch.totalAmountBaseUnits: must be positive integer base units");
+  }
+  if (raw.currency !== "USDC") return fail("intent.batch.currency: only USDC is supported");
+  if (raw.chainId !== "8453") return fail("intent.batch.chainId: only Base (8453) is supported");
+  if (raw.memo !== null && (!isString(raw.memo) || raw.memo.length > MEMO_MAX_LENGTH)) {
+    return fail(`intent.batch.memo: must be a string of at most ${MEMO_MAX_LENGTH} characters or null`);
+  }
+  const batch = raw as unknown as BatchPaymentCandidate;
+  const sum = batch.recipients.reduce((acc, recipient) => acc + BigInt(recipient.amountBaseUnits), 0n);
+  if (sum.toString() !== batch.totalAmountBaseUnits) {
+    return fail("intent.batch.totalAmountBaseUnits: must equal the sum of recipient amounts");
+  }
+  return ok(batch);
+}
+
 export function validatePaymentIntent(raw: unknown): ValidationResult<PaymentIntent> {
   if (!isRecord(raw)) return fail("intent: must be an object");
-  if (!hasOnlyKeys(raw, ["action", "amount", "currency", "recipient", "memo", "missingFields", "candidates", "source"])) {
+  if (!hasOnlyKeys(raw, ["action", "amount", "currency", "recipient", "memo", "missingFields", "candidates", "source", "batch"])) {
     return fail("intent: has unknown keys");
   }
   if (!isAgentAction(raw.action)) return fail("intent.action: must be pay, claim_pay, status or unknown");
@@ -208,6 +261,26 @@ export function validatePaymentIntent(raw: unknown): ValidationResult<PaymentInt
   const candidatesResult = validatePaymentCandidates(raw.candidates);
   if (!candidatesResult.ok) return candidatesResult;
   const candidates = candidatesResult.value;
+
+  const hasBatch = raw.batch !== undefined && raw.batch !== null;
+  if (hasBatch) {
+    const batchResult = validateBatchCandidate(raw.batch);
+    if (!batchResult.ok) return batchResult;
+    if (raw.action !== "batch_pay") return fail("intent.batch: only batch_pay actions may carry a batch");
+    if (raw.amount !== null) return fail("intent.amount: must be null for batch payments");
+    if (raw.recipient !== null) return fail("intent.recipient: must be null for batch payments");
+    for (const recipient of batchResult.value.recipients) {
+      if (recipient.address !== null && !addressIsFromCandidates(recipient.address, candidates)) {
+        return fail("intent.batch.recipients: address must equal a deterministically extracted candidate address");
+      }
+      if (recipient.address === null && !aliasIsFromCandidates(recipient.label, candidates)) {
+        return fail("intent.batch.recipients: alias must equal a deterministically extracted candidate alias");
+      }
+    }
+  }
+  if (raw.action === "batch_pay" && !hasBatch && Array.isArray(raw.missingFields) && raw.missingFields.length === 0) {
+    return fail("intent.batch: required for batch_pay");
+  }
 
   if (raw.recipient !== null) {
     if (!isRecord(raw.recipient)) return fail("intent.recipient: must be an object or null");
