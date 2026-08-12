@@ -32,6 +32,64 @@ npm run judge:doctor      # judge readiness (no payments)
 
 No secrets appear in this repository.
 
+## Roadmap
+
+### Shipped
+
+- M1 KeeperHub real execution proof
+- M2 persisted execution state
+- M3 Telegram agent foundation
+- M4 community workspace + human approval
+- M5 batch payouts + audit integrity
+- M6 judge mode + deployment readiness
+- M7 claim links
+- M8 S1 deterministic agent core
+- M8 S2 optional model provider layer
+- M8 S3 Telegram conversational UX
+
+**M8 S3 shipped scope (exactly what is implemented and tested):**
+
+- natural-language payment sentence shapes in community group chats
+  (`SOLVO_AGENT_ENABLED=true`), routed only on deterministic parse failure
+- alias and 0x-address payments via the workspace recipient directory
+- claim-link creation from natural language
+- status lookups that read the payout pipeline
+- memo/reason capture into prepared payout items (sanitized, 140-char cap)
+- truthful reply contract (no fabricated hashes, proof, or completion claims)
+- no auto-execution — every prepared payment stays `pending_approval`
+- approval by an owner or approver is still required
+- Judge Mode is not reachable through natural language
+- the model provider remains opt-in and default-off
+  (`SOLVO_AGENT_PROVIDER=static` is the default; no model calls are made
+  unless an operator explicitly enables the provider)
+
+### In progress
+
+- M8 final integration/review (S3 slice gate complete)
+- production operator enablement (enabling `SOLVO_AGENT_ENABLED` and, if
+  desired, the model provider) — not yet done
+
+### Next
+
+- M9 agent hardening / real-world language QA
+- M10 natural-language batch/distribute
+- M11 smarter claim links
+- M12 web admin dashboard
+- M13 retry/recovery console
+
+### Later
+
+Deferred/optional:
+
+- KeeperHub workflow companion
+- x402 paid workflow/report surface
+- richer model provider support
+- public sandbox/community testing
+
+**Safety note:** the agent prepares payment requests only. Owners/approvers
+still approve. KeeperHub execution happens only after approval. Transaction
+proof comes from the execution pipeline, never from the model or agent_runs.
+
 ## Getting Started
 
 First, run the development server:
