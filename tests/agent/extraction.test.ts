@@ -257,6 +257,27 @@ describe("agent candidate extraction", () => {
       ["1"],
     );
   });
+
+  it("captures both names in a multi-recipient mention so it stays ambiguous", () => {
+    const result = extract("pay blossom and mike 0.01 USDC", ["blossom", "endurance"]);
+    assert.deepEqual(
+      result.candidates.aliases.map((c) => c.normalized),
+      ["blossom", "mike"],
+    );
+  });
+
+  it("classifies fiat codes as unsupported tokens", () => {
+    for (const token of ["NGN", "USD", "EUR", "GBP"]) {
+      const result = extract(`pay blossom 10 ${token}`);
+      assert.equal(result.candidates.tokens[0]?.normalized, token.toLowerCase());
+      assert.equal(result.candidates.tokens[0]?.validationStatus, "invalid", token);
+    }
+  });
+
+  it("skips malformed leading-dot amounts instead of misreading them", () => {
+    const result = extract("pay blossom .01 USDC", ["blossom"]);
+    assert.deepEqual(result.candidates.amounts, []);
+  });
 });
 
 describe("agent memo extraction", () => {

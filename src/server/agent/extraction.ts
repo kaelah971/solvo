@@ -72,6 +72,48 @@ const UNSUPPORTED_TOKENS = new Set([
   "op",
   "bnb",
   "xlm",
+  // Other crypto codes (whole-word only; "link"/"dot"/"ton" etc. are
+  // deliberately NOT listed because they are ordinary English words).
+  "btc",
+  "xrp",
+  "ltc",
+  "ada",
+  "doge",
+  "xmr",
+  "weth",
+  "shib",
+  "apt",
+  "sui",
+  "avax",
+  // Fiat currency codes: never silently defaulted to USDC.
+  "usd",
+  "eur",
+  "gbp",
+  "jpy",
+  "ngn",
+  "cny",
+  "inr",
+  "krw",
+  "chf",
+  "aud",
+  "cad",
+  "sgd",
+  "hkd",
+  "nzd",
+  "sek",
+  "nok",
+  "dkk",
+  "zar",
+  "brl",
+  "mxn",
+  "idr",
+  "php",
+  "thb",
+  "vnd",
+  "myr",
+  "pln",
+  "ils",
+  "uah",
 ]);
 
 /** Unsupported chains are captured as invalid candidates, never normalized. */
@@ -160,7 +202,7 @@ const UNSAFE_MARKERS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
   { pattern: /\buse sql\b|\braw sql\b|\bsql injection/i, flag: "sql_instruction" },
   { pattern: /post (a |an )?(url|request|to|a request)/i, flag: "url_instruction" },
   { pattern: /drain (the |my |our )?wallet/i, flag: "drain_wallet" },
-  { pattern: /mark (this |the |it |my )?(transaction|payment|payout)?\s*(as )?successful/i, flag: "fabricate_success" },
+  { pattern: /mark (this |the |it |my )?(transaction|payment|payout)?\s*(as )?(successful|completed)/i, flag: "fabricate_success" },
   { pattern: /fake (a |the )?(transaction|hash|receipt|proof)/i, flag: "fabricate_success" },
 ];
 
@@ -308,6 +350,24 @@ function nearestVerb(items: Item[], i: number): "pay" | "claim" | null {
   return null;
 }
 
+/**
+ * Multi-recipient detection: a word following "and"/"or" after another
+ * name, or directly following another name, is itself a recipient mention.
+ * This keeps "pay blossom and mike 0.01 USDC" AMBIGUOUS instead of silently
+ * becoming a single payment to blossom. Names not in the registry are still
+ * captured so the planner can clarify rather than guess.
+ */
+function aliasChain(items: Item[], i: number, registry: ReadonlySet<string>): boolean {
+  const previous = items[i - 1];
+  if (previous === undefined) return false;
+  if (previous.lower === "and" || previous.lower === "or") {
+    const prior = items[i - 2];
+    return prior !== undefined && prior.klass === "word" && registry.has(prior.lower);
+  }
+  // Comma/whitespace adjacency after a known name ("blossom, mike").
+  return previous.klass === "word" && registry.has(previous.lower);
+}
+
 // ── Main entry ─────────────────────────────────────────────────────────────
 
 export function extractCandidates(text: string, workspaceAliases: readonly string[] = []): ExtractionResult {
@@ -384,9 +444,11 @@ export function extractCandidates(text: string, workspaceAliases: readonly strin
         continue;
       }
       // A number immediately preceded by a sign is a negative/positive
-      // amount, not a candidate.
+      // amount, and a number starting after a dot (".01") is a malformed
+      // decimal fragment — neither becomes a candidate (the user is asked
+      // for a well-formed amount instead of a misread value).
       const previousChar = item.index > 0 ? text[item.index - 1] : "";
-      if (previousChar === "-" || previousChar === "+") continue;
+      if (previousChar === "-" || previousChar === "+" || previousChar === ".") continue;
 
       const associatedToken =
         items[i + 1] !== undefined && items[i + 1].klass === "token" ? items[i + 1].lower : null;
@@ -459,7 +521,7 @@ export function extractCandidates(text: string, workspaceAliases: readonly strin
       if (item.lower.length < 2) continue;
       const inRegistry = registry.has(item.lower);
       const context = inRegistry ? "pay_verb" : aliasContext(items, i);
-      if (context !== null) {
+      if (context !== null || aliasChain(items, i, registry)) {
         pushUnique(
           candidates.aliases,
           (c) => c.normalized ?? c.raw,
