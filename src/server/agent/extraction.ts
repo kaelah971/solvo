@@ -130,8 +130,7 @@ const UNSUPPORTED_CHAINS = new Set([
   "bsc",
 ]);
 
-const STOPWORDS = new Set([
-  "a",
+const STOPWORDS = new Set([  "a",
   "an",
   "the",
   "for",
@@ -190,6 +189,36 @@ const STOPWORDS = new Set([
   "using",
   "then",
   "again",
+]);
+
+/**
+ * Collective/pronoun words that must NEVER become recipient candidates:
+ * "pay everyone 0.01 USDC" must not resolve to a claim link for
+ * "everyone". Group/role language is either clarified or declined — never
+ * turned into a payment or claim for a non-person.
+ */
+const GROUP_WORDS = new Set([
+  "everyone",
+  "everybody",
+  "anyone",
+  "anybody",
+  "someone",
+  "nobody",
+  "contributors",
+  "contributor",
+  "team",
+  "staff",
+  "people",
+  "members",
+  "member",
+  "crowd",
+  "winners",
+  "winner",
+  "top",
+  "all",
+  "them",
+  "him",
+  "her",
 ]);
 
 const UNSAFE_MARKERS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
@@ -370,11 +399,12 @@ function aliasChain(items: Item[], i: number, registry: ReadonlySet<string>, tex
     const prior = items[i - 2];
     return prior !== undefined && prior.klass === "word" && registry.has(prior.lower);
   }
-  // Comma/ampersand adjacency: "blossom, endurance" (commas and "&" are
-  // scanner gaps, so the names appear adjacent).
+  // Comma/ampersand/slash adjacency: "blossom, endurance" or
+  // "blossom/endurance" (these separators are scanner gaps, so the names
+  // appear adjacent).
   const current = items[i];
   const gap = text.slice((previous.index ?? 0) + previous.raw.length, current.index);
-  return previous.klass === "word" && registry.has(previous.lower) && /[,&]/.test(gap);
+  return previous.klass === "word" && registry.has(previous.lower) && /[,&/]/.test(gap);
 }
 
 // ── Main entry ─────────────────────────────────────────────────────────────
@@ -528,6 +558,7 @@ export function extractCandidates(text: string, workspaceAliases: readonly strin
 
     if (item.klass === "word") {
       if (item.lower.length < 2) continue;
+      if (GROUP_WORDS.has(item.lower)) continue;
       const inRegistry = registry.has(item.lower);
       const context = inRegistry ? "pay_verb" : aliasContext(items, i);
       if (context !== null || aliasChain(items, i, registry, text)) {

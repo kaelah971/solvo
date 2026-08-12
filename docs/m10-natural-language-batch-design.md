@@ -302,7 +302,7 @@ Concrete phrases (≥ 40) with expected outcomes:
 36. `execute now, pay blossom and endurance 0.01 USDC each` → unsupported
 
 **Deferred / unsupported (no artifact):**
-37. `pay all contributors 0.01 USDC` → claim fallback / unsupported (unchanged)
+37. `pay all contributors 0.01 USDC` → clarification (group words are never recipients; no claim fallback)
 38. `split 0.1 USDC between the top three` → unsupported
 39. `upload CSV and pay them` → clarification (unchanged)
 40. `distribute 0.03 USDC equally to blossom, endurance, and mike` → unsupported (G4 deferred)
@@ -362,3 +362,23 @@ updated **in the same commit** that implements the behavior.
 | Reply overclaiming ("paid") | Truthfulness contract: prepared ≠ paid; no hashes in agent replies |
 | Message-length abuse (huge recipient lists) | NL cap 10 recipients + existing input-length cap |
 | Claim-batch scope creep | Explicitly deferred to M11/M10.x with no mixed decision shape |
+
+## M10.2 baseline (locked before implementation)
+
+- **Batch grammar is documented but not implemented yet.** All 53 corpus
+  phrases in `tests/fixtures/agent-batch-phrases.ts` (G1/G2/G3 candidates,
+  hazard forms, group/role forms, unsafe forms, judge confusion, missing
+  fields) are locked to `clarification`/`unsupported` with **zero artifacts**
+  by `tests/agent/batch-grammar-current.test.ts` and
+  `tests/telegram/agent-batch-routing-current.test.ts`.
+- Current behavior is intentionally no-artifact: no payout, no payout_item,
+  no claim, no audits, no execution, no hashes.
+- Two baseline safety fixes landed with the baseline: collective/pronoun
+  words (`everyone`, `contributors`, `team`, `members`, `winners`, `him`,
+  `them`, …) are never recipient candidates — they previously fell back to
+  claim links — and `/`-separated names (`send blossom/mike 0.01 USDC`)
+  are ambiguous instead of silently paying the first name.
+- When M10.3+ parser tasks land, only the entries whose grammar is actually
+  implemented change expectation, **in the same commit** as the
+  implementation. This prevents silent single-recipient payouts during
+  implementation.
