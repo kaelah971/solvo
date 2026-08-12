@@ -183,8 +183,12 @@ function failedMessage(): string {
   return [
     "SORRY",
     "",
-    "Something went wrong. Nothing moved and no funds left the workspace.",
-    "Try again, or use /pay directly.",
+    "I could not safely process that request. Nothing moved and no funds left the workspace.",
+    "",
+    "Use the command forms instead:",
+    "  /pay <address> <amount> USDC",
+    "  /claimpay <amount> USDC",
+    "  /status <payment-id>",
   ].join("\n");
 }
 
