@@ -4,17 +4,19 @@ import type { MissingFieldKey } from "./types.ts";
 /**
  * M8 — Conversational reply builders.
  *
- * Pure formatting of already-produced AgentServiceResult outcomes into safe
- * Telegram-style copy (ALL-CAPS headers + framed lines, matching
- * `community-messages.ts` conventions). Never performs I/O, never touches
- * the repository, and can only reference data the result explicitly carries.
+ * Pure formatting of already-produced AgentServiceResult outcomes into
+ * user-facing Telegram copy. Copy follows the Solvo brand voice: a calm,
+ * exacting treasury execution agent — state what happened, make risk visible
+ * before approval, prefer precise verbs, never overclaim.
  *
- * Safety rules baked into every builder:
- *  - no chain-of-thought, tool names, interpreter internals, or raw JSON;
- *  - no secrets, API keys, bot tokens, DB URLs, or private keys;
- *  - no transaction hashes or execution ids (S1 results never carry them);
+ * Truthfulness rules baked into every builder:
  *  - prepared ≠ paid, claim created ≠ paid, status visible ≠ retryable;
- *  - nothing ever implies funds moved unless the result says so.
+ *  - nothing implies funds moved unless the result says so;
+ *  - KeeperHub execution is only ever mentioned as a FUTURE step after
+ *    approval, never as something already done;
+ *  - no chain-of-thought, internal module names, raw JSON, secrets,
+ *    transaction hashes, or execution ids (S1/S2 results never carry them);
+ *  - failed/unsupported replies point at deterministic slash commands.
  */
 
 export type AgentFormattedReply = {
@@ -54,7 +56,7 @@ export function formatAgentServiceResult(result: AgentServiceResult): AgentForma
 
 function disabledMessage(): string {
   return [
-    "NATURAL-LANGUAGE TREASURY MODE IS OFF",
+    "CONVERSATIONAL TREASURY MODE IS OFF",
     "",
     "Solvo's conversational payment mode is currently disabled.",
     "Use /pay, /claimpay, /batch and /status as usual.",
@@ -75,7 +77,7 @@ function duplicateMessage(hasPayout: boolean, hasClaim: boolean): string {
     return [
       "ALREADY PREPARED",
       "",
-      "I already prepared this payment request and it is waiting for approval.",
+      "I already prepared this payment request. It is waiting for approval by an owner or approver.",
     ].join("\n");
   }
   if (hasClaim) {
@@ -90,7 +92,7 @@ function duplicateMessage(hasPayout: boolean, hasClaim: boolean): string {
 
 function clarificationMessage(missingFields: MissingFieldKey[]): string {
   const questions = missingFields.map(fieldQuestion);
-  const header = "I NEED MORE INFORMATION";
+  const header = "I NEED ONE MORE DETAIL";
   if (questions.length === 0) return `${header}\n\nWhat would you like Solvo to do?`;
   return [`${header}`, "", ...questions].join("\n");
 }
@@ -98,13 +100,13 @@ function clarificationMessage(missingFields: MissingFieldKey[]): string {
 function fieldQuestion(field: MissingFieldKey): string {
   switch (field) {
     case "amount":
-      return "How much should I send? e.g. Send Daniel 20 USDC";
+      return "How much should I send? e.g. Send 20 USDC to daniel";
     case "recipient":
-      return "Who should receive it? e.g. Send 20 USDC to daniel";
+      return "Who should receive it? Send to a saved alias or a 0x wallet address. e.g. Send 20 USDC to daniel";
     case "currency":
       return "Which token? Solvo executes Base USDC.";
     case "workspace":
-      return "This conversation is not linked to a Solvo workspace yet.";
+      return "This action needs a community workspace.";
     case "payout_id":
       return "Which payment should I check? e.g. Check status <payment-id>";
   }
@@ -121,10 +123,11 @@ function preparedPaymentMessage(result: Extract<AgentServiceResult, { outcome: "
     "",
     `AMOUNT       ${baseUnitsToUsdc(prepared.amountBaseUnits)} USDC`,
     `RECIPIENT    ${recipientLabel}`,
-    "STATUS       PENDING APPROVAL",
+    "STATUS       APPROVAL REQUIRED",
     "",
     "No funds have moved.",
     "An owner or approver must approve before anything executes.",
+    "KeeperHub execution happens only after approval.",
   ].join("\n");
   return { text, buttons: prepared.buttons };
 }
@@ -140,8 +143,10 @@ function claimLinkMessage(result: Extract<AgentServiceResult, { outcome: "claim_
   ];
   if (claim.claimUrl !== null) {
     lines.push(
-      "The recipient opens the link and submits a wallet address.",
-      "No funds move until an owner or approver approves the exact destination.",
+      "The recipient opens the link and enters a wallet address.",
+      "No funds move after the wallet is entered alone:",
+      "an owner or approver must approve the exact claimed destination",
+      "before KeeperHub execution.",
       "",
       claim.claimUrl,
     );
@@ -154,7 +159,7 @@ function claimLinkMessage(result: Extract<AgentServiceResult, { outcome: "claim_
 function statusVisibleMessage(result: Extract<AgentServiceResult, { outcome: "status_visible" }>): AgentFormattedReply {
   const status = result.status;
   const lines = [
-    "PAYMENT STATUS",
+    "STATUS FOUND",
     "",
     `ID           ${status.payoutId}`,
     `STATE        ${status.state}`,
@@ -168,12 +173,13 @@ function statusVisibleMessage(result: Extract<AgentServiceResult, { outcome: "st
 
 function unsupportedMessage(reason: string): string {
   return [
-    "I COULDN'T SAFELY TURN THAT INTO A TREASURY ACTION",
+    "I COULDN'T SAFELY PROCESS THAT",
     "",
     reason,
     "",
     "Examples you can use:",
     "  Send 0.01 USDC to 0x...",
+    "  Pay blossom 0.01 USDC",
     "  Create a claim link for 0.05 USDC",
     "  Check status <payment-id>",
   ].join("\n");

@@ -11,7 +11,36 @@ const ADDRESS = "0x742d35cc6634c0532925a3b844bc454e4438f44e";
 const CLAIM_URL = "https://solvo.example/claim/abcdefghijklmnopqrstuvwxyz012345";
 const STATUS_UUID = "550e8400-e29b-41d4-a716-446655440000";
 
-const BANNED_INTERNAL = ["resolve_recipient", "inspect_payment_policy", "inspect_payment_status", "validate_claim_request", "prepare_payment", "create_claim_link", "decline_unsupported", "intentKind", "intent_kind", "candidates"];
+const BANNED_INTERNAL = [
+  "tool",
+  "planner",
+  "candidate",
+  "schema",
+  "llm",
+  "model",
+  "interpreter",
+  "extraction",
+  "agent_run",
+  "json",
+  "raw",
+  "provider",
+  "stack",
+  "trace",
+  "typeerror",
+  "sql",
+  "keeperhub call",
+  "execution service",
+  "resolve_recipient",
+  "inspect_payment_policy",
+  "inspect_payment_status",
+  "validate_claim_request",
+  "prepare_payment",
+  "create_claim_link",
+  "decline_unsupported",
+  "intentKind",
+  "intent_kind",
+  "candidates",
+];
 const BANNED_SECRETS = ["kh_", "sk-", "BEGIN PRIVATE KEY", "postgres://", "TELEGRAM_BOT_TOKEN", "DATABASE_URL", "apiKey", "bot token"];
 const BANNED_EXECUTION = ["transactionHash", "keeperhub_execution_id", "executionId"];
 
@@ -117,9 +146,78 @@ describe("agent reply builders", () => {
     assert.match(reply.text, /20/i);
     assert.match(reply.text, /daniel/i);
     assert.equal(/paid|completed|sent/i.test(reply.text), false);
+    assert.equal(/executed|transferred/i.test(reply.text), false);
     assert.equal(reply.buttons?.length, 2);
     assert.equal(reply.buttons?.[0].text, "APPROVE");
     assertSafe(reply.text, "prepared_payment");
+  });
+
+  it("prepared payment names the owner/approver gate and the after-approval KeeperHub step", () => {
+    const result: AgentServiceResult = {
+      outcome: "prepared_payment",
+      prepared: {
+        outcome: "created",
+        payoutId: PAYOUT_ID,
+        itemId: "item-1",
+        amountBaseUnits: "10000",
+        recipientAddress: ADDRESS,
+        recipientAlias: "daniel",
+        state: "pending_approval",
+        approvalRequired: true,
+        buttons: [],
+      },
+    };
+    const reply = formatAgentServiceResult(result);
+    assert.match(reply.text, /owner or approver/i);
+    assert.match(reply.text, /approval required/i);
+    assert.match(reply.text, /keeperhub execution happens only after approval/i);
+    assert.equal(reply.text.includes("payment sent"), false);
+    assert.equal(reply.text.includes("completed"), false);
+    assertSafe(reply.text, "prepared payment gates");
+  });
+
+  it("claim link copy explains the recipient wallet step and the exact-destination approval gate", () => {
+    const result: AgentServiceResult = {
+      outcome: "claim_link_created",
+      claim: {
+        outcome: "created",
+        claimId: CLAIM_ID,
+        claimUrl: CLAIM_URL,
+        tokenPrefix: "abcdefgh",
+        amountBaseUnits: "50000",
+        currencySymbol: "USDC",
+        chainId: "8453",
+        tokenAddress: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        expiresAt: "2026-08-19T13:00:00.000Z",
+        state: "created",
+        approvalBehavior: "x",
+      },
+    };
+    const reply = formatAgentServiceResult(result);
+    assert.match(reply.text, /opens the link and enters a wallet address/i);
+    assert.match(reply.text, /owner or approver must approve the exact claimed destination/i);
+    assert.match(reply.text, /before keeperhub execution/i);
+    assert.equal(/\bpaid\b|completed|claim .*paid/i.test(reply.text), false);
+    assertSafe(reply.text, "claim gates");
+  });
+
+  it("unsupported copy lists all four safe example shapes", () => {
+    const reply = formatAgentServiceResult({ outcome: "unsupported", reason: "Unsupported token or chain." });
+    assert.match(reply.text, /Send 0\.01 USDC to 0x\.\.\./i);
+    assert.match(reply.text, /Pay blossom 0\.01 USDC/i);
+    assert.match(reply.text, /Create a claim link for 0\.05 USDC/i);
+    assert.match(reply.text, /Check status <payment-id>/i);
+    assertSafe(reply.text, "unsupported examples");
+  });
+
+  it("failed copy offers deterministic slash-command fallbacks and never mentions judge mode", () => {
+    const reply = formatAgentServiceResult({ outcome: "failed", reason: "interpreter_error: kh_secret_marker" });
+    assert.match(reply.text, /\/pay <address> <amount> USDC/i);
+    assert.match(reply.text, /\/claimpay <amount> USDC/i);
+    assert.match(reply.text, /\/status <payment-id>/i);
+    assert.equal(reply.text.includes("judgepay"), false);
+    assert.equal(/judge/i.test(reply.text), false);
+    assertSafe(reply.text, "failed fallbacks");
   });
 
   it("formats prepared_payment without buttons when none are provided", () => {
@@ -189,6 +287,25 @@ describe("agent reply builders", () => {
     assertSafe(reply.text, "status_visible");
   });
 
+  it("status copy only claims completion when the result provides a completed time", () => {
+    const pending: AgentServiceResult = {
+      outcome: "status_visible",
+      status: { outcome: "visible", payoutId: STATUS_UUID, state: "pending_approval", itemCount: 1, completedAt: null },
+    };
+    const pendingReply = formatAgentServiceResult(pending);
+    assert.equal(/completed|executed|transferred/i.test(pendingReply.text), false);
+    assertSafe(pendingReply.text, "status pending");
+
+    const completed: AgentServiceResult = {
+      outcome: "status_visible",
+      status: { outcome: "visible", payoutId: STATUS_UUID, state: "completed", itemCount: 1, completedAt: "2026-08-12T13:00:00.000Z" },
+    };
+    const completedReply = formatAgentServiceResult(completed);
+    assert.match(completedReply.text, /completed/i);
+    assert.match(completedReply.text, /13:00:00/i);
+    assertSafe(completedReply.text, "status completed");
+  });
+
   it("formats status_not_found with a generic no-leak message", () => {
     const reply = formatAgentServiceResult({ outcome: "status_not_found", payoutId: STATUS_UUID });
     assert.match(reply.text, /couldn't find/i);
@@ -248,6 +365,32 @@ describe("agent reply builders", () => {
       assertSafe(reply.text, result.outcome);
       assert.equal(reply.text.includes('"'), false, `${result.outcome}: contains quotes`);
       assert.equal(reply.text.includes("\\n"), false, `${result.outcome}: contains escapes`);
+    }
+  });
+
+  it("no message contains banned internal terms in any outcome", () => {
+    const results: AgentServiceResult[] = [
+      { outcome: "disabled" },
+      { outcome: "rate_limited", reason: "x" },
+      { outcome: "duplicate", payoutId: PAYOUT_ID, claimId: null },
+      { outcome: "duplicate", payoutId: null, claimId: CLAIM_ID },
+      { outcome: "needs_clarification", missingFields: ["amount", "recipient", "currency", "workspace", "payout_id"], question: "q" },
+      {
+        outcome: "prepared_payment",
+        prepared: { outcome: "created", payoutId: PAYOUT_ID, itemId: "i", amountBaseUnits: "10000", recipientAddress: ADDRESS, recipientAlias: "daniel", state: "pending_approval", approvalRequired: true, buttons: [] },
+      },
+      {
+        outcome: "claim_link_created",
+        claim: { outcome: "created", claimId: CLAIM_ID, claimUrl: CLAIM_URL, tokenPrefix: "abcdefgh", amountBaseUnits: "50000", currencySymbol: "USDC", chainId: "8453", tokenAddress: "0x", expiresAt: "2026-08-19T13:00:00.000Z", state: "created", approvalBehavior: "x" },
+      },
+      { outcome: "status_visible", status: { outcome: "visible", payoutId: STATUS_UUID, state: "pending_approval", itemCount: 1, completedAt: null } },
+      { outcome: "status_not_found", payoutId: STATUS_UUID },
+      { outcome: "blocked", reason: "x" },
+      { outcome: "unsupported", reason: "x" },
+      { outcome: "failed", reason: "x" },
+    ];
+    for (const result of results) {
+      assertSafe(formatAgentServiceResult(result).text, result.outcome);
     }
   });
 
