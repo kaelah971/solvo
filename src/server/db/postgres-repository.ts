@@ -1,4 +1,5 @@
 import type { Sql } from "postgres";
+import type { PendingQuery } from "postgres";
 
 import { canTransition, StateTransitionError, type ExecutionState } from "../execution/state-machine.ts";
 import { isAgentRunTerminalOutcome, type AgentRunStatus } from "../agent/types.ts";
@@ -14,7 +15,13 @@ import type {
   SolvoRepository,
   UpdateAgentRunInput,
   UpdateExecutionAttemptInput,
+  ListAgentRunsOptions,
+  ListAuditEventsOptions,
+  ListClaimLinksOptions,
+  ListPayoutItemsOptions,
+  ListPayoutsOptions,
 } from "./repository.ts";
+import { clampDashboardLimit } from "./repository.ts";
 import type {
   AgentRunRow,
   AuditEventRow,
@@ -363,6 +370,143 @@ export class PostgresRepository implements SolvoRepository {
       JOIN payouts p ON p.id = pi.payout_id
       WHERE p.workspace_id = ${workspaceId}
         AND p.requester_id = ${requesterId}
+        AND pi.status::text = ANY(${statuses as string[]})
+    `;
+    return Number(rows[0].n);
+  }
+
+  // ── M12 dashboard read helpers (workspace-scoped, deterministic) ─────────
+
+  async listPayoutsByWorkspace(
+    workspaceId: string,
+    options: ListPayoutsOptions = {},
+  ): Promise<PayoutRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const statuses = options.status === undefined ? null : asStringList(options.status);
+    const sourceTypes = options.sourceType === undefined ? null : asStringList(options.sourceType);
+    const where = whereFragment(this.sql, this.sql`p.workspace_id = ${workspaceId}`);
+    if (statuses !== null) where.append(this.sql` AND p.status::text = ANY(${statuses as string[]})`);
+    if (sourceTypes !== null) where.append(this.sql` AND p.source_type::text = ANY(${sourceTypes as string[]})`);
+    if (options.before !== undefined) {
+      where.append(this.sql` AND (p.created_at, p.id) < (${options.before}, ${options.beforeId ?? ""})`);
+    }
+    const rows = await this.sql<RawRow[]>`
+      SELECT p.* FROM payouts p
+      WHERE ${where}
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(mapPayout);
+  }
+
+  async listPayoutItemsByPayoutIds(workspaceId: string, payoutIds: string[]): Promise<PayoutItemRow[]> {
+    const rows = await this.sql<RawRow[]>`
+      SELECT pi.* FROM payout_items pi
+      JOIN payouts p ON p.id = pi.payout_id
+      WHERE p.workspace_id = ${workspaceId}
+        AND pi.payout_id = ANY(${payoutIds})
+      ORDER BY pi.created_at DESC, pi.id DESC
+    `;
+    return rows.map(mapPayoutItem);
+  }
+
+  async listPayoutItemsByWorkspace(
+    workspaceId: string,
+    options: ListPayoutItemsOptions = {},
+  ): Promise<PayoutItemRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const statuses = options.statuses === undefined ? null : options.statuses;
+    const where = whereFragment(this.sql, this.sql`p.workspace_id = ${workspaceId}`);
+    if (statuses !== null) where.append(this.sql` AND pi.status::text = ANY(${statuses as string[]})`);
+    if (options.createdSinceIso !== undefined) where.append(this.sql` AND pi.created_at >= ${options.createdSinceIso}`);
+    if (options.completedSinceIso !== undefined) {
+      where.append(this.sql` AND pi.completed_at >= ${options.completedSinceIso}`);
+    }
+    if (options.before !== undefined) {
+      where.append(this.sql` AND (pi.created_at, pi.id) < (${options.before}, ${options.beforeId ?? ""})`);
+    }
+    const rows = await this.sql<RawRow[]>`
+      SELECT pi.* FROM payout_items pi
+      JOIN payouts p ON p.id = pi.payout_id
+      WHERE ${where}
+      ORDER BY pi.created_at DESC, pi.id DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(mapPayoutItem);
+  }
+
+  async listClaimLinksByWorkspace(
+    workspaceId: string,
+    options: ListClaimLinksOptions = {},
+  ): Promise<ClaimLinkRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const statuses = options.status === undefined ? null : asStringList(options.status);
+    const where = whereFragment(this.sql, this.sql`workspace_id = ${workspaceId}`);
+    if (statuses !== null) where.append(this.sql` AND status::text = ANY(${statuses as string[]})`);
+    if (options.before !== undefined) {
+      where.append(this.sql` AND (created_at, id) < (${options.before}, ${options.beforeId ?? ""})`);
+    }
+    const rows = await this.sql<RawRow[]>`
+      SELECT * FROM claim_links
+      WHERE ${where}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(mapClaim);
+  }
+
+  async listAuditEventsByWorkspace(
+    workspaceId: string,
+    options: ListAuditEventsOptions = {},
+  ): Promise<AuditEventRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const where = whereFragment(this.sql, this.sql`workspace_id = ${workspaceId}`);
+    if (options.payoutId !== undefined) where.append(this.sql` AND payout_id = ${options.payoutId}`);
+    if (options.actorId !== undefined) where.append(this.sql` AND actor_id = ${options.actorId}`);
+    if (options.eventType !== undefined) where.append(this.sql` AND event_type = ${options.eventType}`);
+    if (options.claimId !== undefined) where.append(this.sql` AND metadata->>'claimId' = ${options.claimId}`);
+    if (options.before !== undefined) {
+      where.append(this.sql` AND (created_at, id) < (${options.before}, ${options.beforeId ?? ""})`);
+    }
+    const rows = await this.sql<RawRow[]>`
+      SELECT * FROM audit_events
+      WHERE ${where}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(mapAuditEvent);
+  }
+
+  async listAgentRunsByWorkspace(
+    workspaceId: string,
+    options: ListAgentRunsOptions = {},
+  ): Promise<AgentRunRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const where = whereFragment(this.sql, this.sql`workspace_id = ${workspaceId}`);
+    if (options.before !== undefined) {
+      where.append(this.sql` AND (created_at, id) < (${options.before}, ${options.beforeId ?? ""})`);
+    }
+    const rows = await this.sql<RawRow[]>`
+      SELECT * FROM agent_runs
+      WHERE ${where}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(mapAgentRun);
+  }
+
+  async countPayoutItemsByWorkspaceStates(
+    workspaceId: string,
+    statuses: readonly ExecutionState[],
+    createdSinceIso?: string,
+  ): Promise<number> {
+    const where = whereFragment(this.sql, this.sql`p.workspace_id = ${workspaceId}`);
+    if (createdSinceIso !== undefined) where.append(this.sql` AND pi.created_at >= ${createdSinceIso}`);
+    const rows = await this.sql<{ n: string }[]>`
+      SELECT count(*) AS n
+      FROM payout_items pi
+      JOIN payouts p ON p.id = pi.payout_id
+      WHERE ${where}
         AND pi.status::text = ANY(${statuses as string[]})
     `;
     return Number(rows[0].n);
@@ -934,4 +1078,25 @@ function mapAgentRun(row: RawRow): AgentRunRow {
     payout_id: text(row.payout_id),
     claim_id: text(row.claim_id),
   };
+}
+
+function asStringList<T extends string>(value: T | readonly T[]): string[] {
+  return (Array.isArray(value) ? [...value] : [value]) as string[];
+}
+
+/**
+ * postgres.js fragments support `.append()` for dynamic query composition at
+ * runtime; the shipped type declarations omit it, so we surface it with a
+ * narrow local type. The fragment stays a normal PendingQuery for
+ * interpolation into the final query.
+ */
+type AppendableFragment = ReturnType<Sql["unsafe"]> & {
+  append(part: unknown): AppendableFragment;
+};
+
+function whereFragment<T extends readonly object[]>(
+  sql: Sql,
+  initial: ReturnType<Sql["unsafe"]> | PendingQuery<T>,
+): AppendableFragment {
+  return initial as unknown as AppendableFragment;
 }

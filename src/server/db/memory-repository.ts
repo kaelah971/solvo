@@ -19,7 +19,13 @@ import type {
   SolvoRepository,
   UpdateAgentRunInput,
   UpdateExecutionAttemptInput,
+  ListAgentRunsOptions,
+  ListAuditEventsOptions,
+  ListClaimLinksOptions,
+  ListPayoutItemsOptions,
+  ListPayoutsOptions,
 } from "./repository.ts";
+import { clampDashboardLimit } from "./repository.ts";
 import {
   canClaimTransition,
   type AgentRunRow,
@@ -257,6 +263,112 @@ export class MemoryRepository implements SolvoRepository {
       const payout = this.payouts.get(item.payout_id);
       if (!payout || payout.workspace_id !== workspaceId) continue;
       if (payout.requester_id !== requesterId) continue;
+      if (!statuses.includes(item.status as ExecutionState)) continue;
+      count += 1;
+    }
+    return count;
+  }
+
+  // ── M12 dashboard read helpers (workspace-scoped, deterministic) ─────────
+
+  async listPayoutsByWorkspace(
+    workspaceId: string,
+    options: ListPayoutsOptions = {},
+  ): Promise<PayoutRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const statuses = options.status === undefined ? null : toList(options.status);
+    const sourceTypes = options.sourceType === undefined ? null : toList(options.sourceType);
+    return [...this.payouts.values()]
+      .filter((payout) => payout.workspace_id === workspaceId)
+      .filter((payout) => statuses === null || statuses.includes(payout.status as ExecutionState))
+      .filter((payout) => sourceTypes === null || sourceTypes.includes(payout.source_type))
+      .filter((payout) => !isAfterCursor(payout, options.before, options.beforeId))
+      .sort((a, b) => compareNewestFirst(a, b))
+      .slice(0, limit);
+  }
+
+  async listPayoutItemsByPayoutIds(workspaceId: string, payoutIds: string[]): Promise<PayoutItemRow[]> {
+    const owned = new Set(
+      [...this.payouts.values()]
+        .filter((payout) => payout.workspace_id === workspaceId)
+        .map((payout) => payout.id),
+    );
+    return [...this.payoutItems.values()]
+      .filter((item) => payoutIds.includes(item.payout_id) && owned.has(item.payout_id))
+      .sort((a, b) => compareNewestFirst(a, b));
+  }
+
+  async listPayoutItemsByWorkspace(
+    workspaceId: string,
+    options: ListPayoutItemsOptions = {},
+  ): Promise<PayoutItemRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const statuses = options.statuses === undefined ? null : options.statuses;
+    const items = [...this.payoutItems.values()].filter((item) => {
+      const payout = this.payouts.get(item.payout_id);
+      if (!payout || payout.workspace_id !== workspaceId) return false;
+      if (statuses !== null && !statuses.includes(item.status as ExecutionState)) return false;
+      if (options.createdSinceIso !== undefined && item.created_at < options.createdSinceIso) return false;
+      if (options.completedSinceIso !== undefined && (item.completed_at ?? "") < options.completedSinceIso) {
+        return false;
+      }
+      return true;
+    });
+    return items.sort((a, b) => compareNewestFirst(a, b)).slice(0, limit);
+  }
+
+  async listClaimLinksByWorkspace(
+    workspaceId: string,
+    options: ListClaimLinksOptions = {},
+  ): Promise<ClaimLinkRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    const statuses = options.status === undefined ? null : toList(options.status);
+    return [...this.claimLinks.values()]
+      .filter((claim) => claim.workspace_id === workspaceId)
+      .filter((claim) => statuses === null || statuses.includes(claim.status))
+      .filter((claim) => !isAfterCursor(claim, options.before, options.beforeId))
+      .sort((a, b) => compareNewestFirst(a, b))
+      .slice(0, limit);
+  }
+
+  async listAuditEventsByWorkspace(
+    workspaceId: string,
+    options: ListAuditEventsOptions = {},
+  ): Promise<AuditEventRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    return [...this.auditEvents]
+      .filter((event) => event.workspace_id === workspaceId)
+      .filter((event) => options.payoutId === undefined || event.payout_id === options.payoutId)
+      .filter((event) => options.actorId === undefined || event.actor_id === options.actorId)
+      .filter((event) => options.eventType === undefined || event.event_type === options.eventType)
+      .filter((event) => options.claimId === undefined || event.metadata.claimId === options.claimId)
+      .filter((event) => !isAfterCursor(event, options.before, options.beforeId))
+      .sort((a, b) => compareNewestFirst(a, b))
+      .slice(0, limit);
+  }
+
+  async listAgentRunsByWorkspace(
+    workspaceId: string,
+    options: ListAgentRunsOptions = {},
+  ): Promise<AgentRunRow[]> {
+    const limit = clampDashboardLimit(options.limit);
+    return [...this.agentRuns.values()]
+      .filter((run) => run.workspace_id === workspaceId)
+      .filter((run) => !isAfterCursor(run, options.before, options.beforeId))
+      .sort((a, b) => compareNewestFirst(a, b))
+      .slice(0, limit);
+  }
+
+  async countPayoutItemsByWorkspaceStates(
+    workspaceId: string,
+    statuses: readonly ExecutionState[],
+    createdSinceIso?: string,
+  ): Promise<number> {
+    let count = 0;
+    for (const item of this.payoutItems.values()) {
+      const payout = this.payouts.get(item.payout_id);
+      if (!payout || payout.workspace_id !== workspaceId) continue;
+      if (createdSinceIso !== undefined && item.created_at < createdSinceIso) continue;
       if (!statuses.includes(item.status as ExecutionState)) continue;
       count += 1;
     }
@@ -721,4 +833,30 @@ export class MemoryRepository implements SolvoRepository {
       (run) => run.telegram_user_id === input.telegramUserId && run.started_at >= input.sinceIso,
     ).length;
   }
+}
+
+// ── M12 dashboard read helper functions (deterministic ordering/cursors) ───
+
+function toList<T>(value: T | readonly T[]): T[] {
+  return (Array.isArray(value) ? [...value] : [value]) as T[];
+}
+
+function createdKey(row: { created_at: string; id: string }): string {
+  return `${row.created_at}\u0000${row.id}`;
+}
+
+/** Newest first: (created_at, id) descending. */
+function compareNewestFirst(a: { created_at: string; id: string }, b: { created_at: string; id: string }): number {
+  return createdKey(b).localeCompare(createdKey(a));
+}
+
+/** True when the row sorts at or before the cursor (strictly newer rows kept). */
+function isAfterCursor(
+  row: { created_at: string; id: string },
+  before: string | undefined,
+  beforeId: string | undefined,
+): boolean {
+  if (before === undefined) return false;
+  if (row.created_at !== before) return row.created_at > before;
+  return row.id > (beforeId ?? "");
 }

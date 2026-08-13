@@ -2,9 +2,76 @@
 
 Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
-Status: **DESIGN ONLY — NOT IMPLEMENTED.** M12.1 specifies the operator
-console before any dashboard code ships. No dashboard pages, read models,
-server actions, migrations, or execution wiring exist yet.
+Status: **M12.1 design + M12.2 read models implemented.** The operator
+console is specified; the safe read-model layer ships in M12.2. No dashboard
+pages/routes, sessions, login links, or admin actions exist yet, and no
+migrations were applied.
+
+## M12.2 read models (implemented)
+
+Implemented on `feature/web-admin-dashboard` (commit after 5ff7a1c):
+
+- **Repository read helpers** (both `MemoryRepository` and
+  `PostgresRepository`, all workspace-scoped, deterministic
+  `(created_at, id)` DESC ordering, `before`/`beforeId` cursor paging,
+  `limit` clamped to `[1, 200]`, default 50):
+  - `listPayoutsByWorkspace(workspaceId, { status?, sourceType?, before?, beforeId?, limit? })`
+  - `listPayoutItemsByPayoutIds(workspaceId, payoutIds)`
+  - `listPayoutItemsByWorkspace(workspaceId, { statuses?, createdSinceIso?, completedSinceIso?, before?, beforeId?, limit? })`
+  - `listClaimLinksByWorkspace(workspaceId, { status?, before?, beforeId?, limit? })`
+    (new newest-first method; `listClaimsByWorkspace` kept untouched)
+  - `listAuditEventsByWorkspace(workspaceId, { payoutId?, actorId?, eventType?, claimId? (metadata), before?, beforeId?, limit? })`
+  - `listAgentRunsByWorkspace(workspaceId, { before?, beforeId?, limit? })`
+  - `countPayoutItemsByWorkspaceStates(workspaceId, statuses, createdSinceIso?)`
+  - Recipients/members reuse the existing `listRecipients` /
+    `listWorkspaceMembers` (already workspace-scoped).
+- **Read-model modules** (`src/server/dashboard/`):
+  - `types.ts` — `DashboardContext`, view contracts, `AGENT_RUNS_TRUTH_NOTE`.
+  - `access.ts` — pure gates `canViewDashboard` / `canViewApprovals` /
+    `canApproveReject` / `canManageMembers` / `canManageRecipients` /
+    `canManagePolicies` / `canReissueClaim` / `canViewSensitiveDestinations` +
+    `isActiveMember` + `maskIdentity` + `resolveDashboardContext` (repo
+    re-read per request — the M12.3 session hand-off point).
+  - `overview.ts` — `buildWorkspaceOverview`: pending approvals, effective
+    pending/claimed claim counts (computed expiry via the M11.2 rules),
+    completed-today count + sum (`completed_at` window), prepared-today sum
+    (`pending_approval`, `created_at` window — prepared ≠ paid), failed/
+    unknown count, active members, recipients, recent audit events + agent
+    runs. **No overview number ever comes from `agent_runs`.**
+  - `payouts.ts` — list + detail views: source labels, state labels, batch
+    distinction (`telegram_batch`/`batch_csv`), per-item states/amounts,
+    requester labels, decision (approver) derived only from
+    `approval_granted`/`approval_rejected` audits, audit timeline, tx proof
+    (hash + explorer) ONLY on completed items that carry a hash, no
+    KeeperHub execution ids, claim item memos hidden (they carry token
+    prefixes), full destinations owner/approver-only (masked for members).
+  - `claims.ts` — list + detail reusing `getEffectiveClaimStatus` /
+    `buildClaimStatusView` (M11.2): masked wallets, computed expiry,
+    pipeline-only proof, effective-status filter, reissue eligibility =
+    role gate (owner/approver) + state gate (created incl. expired /
+    cancelled). Never exposes raw token, hash, or prefix; never
+    reconstructs links.
+  - `members.ts` / `recipients.ts` — workspace-scoped lists with masked
+    identities; full wallets owner/approver-only.
+  - `audit.ts` — whitelisted event views (`eventType`, source family,
+    masked actor, claim/payout refs, small allowlisted metadata summary);
+    never raw metadata JSON, token material, execution ids, or hashes.
+  - `agent-runs.ts` — observability-only views (status, intent kind,
+    decision type, provider label, redacted raw text, links); never
+    candidates/interpretation/decision JSON, secrets, or payment truth.
+- **Truth sources** (locked by tests): prepared/completed/failed numbers
+  from payout/payout_item rows; completed only with pipeline proof; claim
+  status from claim rows + payout pipeline; agent_runs never a payment-truth
+  source; migration 0013 is NOT required by any read model (event types are
+  plain strings at read time).
+- **Access helper decisions**: owner = full admin; approver = approve/
+  reject/reissue/recipients; member = view-only (masked destinations); any
+  inactive/non-member context is denied by every helper; role gates are
+  pure functions of the per-request `DashboardContext`.
+- **No UI/session yet**: no `/app` routes, no `/dashboard` login link, no
+  cookies, no admin actions, no execution wiring. `resolveDashboardContext`
+  is the prepared hand-off for M12.3.
+- **No migration applied** during M12.2 gates.
 
 ## Summary
 
