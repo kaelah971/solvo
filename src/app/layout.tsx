@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "Solvo turns Telegram payment instructions into safe, reliable, auditable USDC transactions.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">{children}</body>

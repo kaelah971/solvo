@@ -2,10 +2,61 @@
 
 Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
-Status: **M12.1 design + M12.2 read models implemented.** The operator
-console is specified; the safe read-model layer ships in M12.2. No dashboard
-pages/routes, sessions, login links, or admin actions exist yet, and no
-migrations were applied.
+Status: **M12.1 design + M12.2 read models + M12.3 overview shell implemented.**
+The operator console is specified; the safe read-model layer and the first
+personalized route ship. No Telegram `/dashboard` login link, full session
+store, or admin actions exist yet, and no migrations were applied.
+
+## M12.3 overview shell (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.2):
+
+- **`/app` exists** as a server-rendered route group: `src/app/app/layout.tsx`
+  (slim operator shell — wordmark, "Operator Dashboard" label, back link; no
+  marketing nav/footer) + `src/app/app/page.tsx` (overview). The root layout's
+  props typing was relaxed to accept nested layouts. `/app` renders
+  `force-dynamic` and is in the build's route table.
+- **Session seam** (`src/server/dashboard/session.ts`):
+  `parseDashboardSessionCookie` / `getDashboardSessionFromHeaders` read ONLY
+  the `solvo_dash_session` cookie (URI-encoded JSON `{workspaceId,
+  telegramUserId}`); `requireDashboardContext` resolves the M12.2 context
+  from the repository on every request and re-checks ACTIVE same-workspace
+  membership (`canViewDashboard`). No query params are ever trusted; the
+  final Telegram-issued one-time login link (M12.4+) plugs in behind this
+  seam, which is injectable/mocked in tests.
+- **Page model** (`src/server/dashboard/overview-page.ts`):
+  `buildOverviewPageModel(repo, ctx)` — JSON-safe `{ ok: true, workspaceLabel,
+  modeLabel, roleLabel, overview }` or the single generic `{ ok: false }`.
+  Pure display mappers (`roleLabel`, `modeLabel`, `auditEventLabel`,
+  `agentRunStatusLabel`, `agentRunDecisionLabel`, `formatUtc`) keep internal
+  terms out of copy.
+- **Unavailable/no-leak behavior**: no session, unknown workspace, non-member,
+  inactive member, and no-DB all render ONE generic
+  `WORKSPACE DASHBOARD UNAVAILABLE` panel — "Open Telegram and type /dashboard
+  to access your workspace dashboard." No workspace/claim/payout/member ids and
+  no raw errors ever render; the unavailable component takes no data props.
+- **Overview cards** (all from the M12.2 read model): pending approvals,
+  claim links waiting, claimed-waiting-approval, prepared today (USDC),
+  completed today (USDC + count), failed/unknown executions, active members,
+  recipients; plus recent audit events (label + masked actor + time) and
+  recent agent requests (status/decision labels + time) with an
+  observability-only note; claim-count-cap warning when the read cap was hit.
+- **Truthfulness copy**: "Prepared does not mean paid.", "Completed totals
+  come from the execution pipeline.", "Unknown is not proof.", "No funds have
+  moved.", "KeeperHub execution happens only after approval." / "Nothing on
+  this dashboard moves funds." No tx hashes render on the overview at all.
+- **No actions/execution**: the page contains no forms, buttons, server
+  actions, or client handlers — read-only, and no `/dashboard` login link
+  wiring exists yet.
+- **Tests** (`tests/dashboard/session.test.ts`, `overview-page.test.ts`,
+  `overview-route-source.test.ts`, +25): session cookie parsing/invalid shapes,
+  query-param non-trust, repo re-check gating (removed member loses access),
+  owner/approver/member overview, identical unavailable for every denied
+  shape, all metrics, cross-workspace exclusion, no token/hash/provider-JSON,
+  JSON-serializability, truthful copy, banned-term scan, no admin controls,
+  route source contract (no KeeperHub/MCP/execution-writer/Telegram/model-
+  provider/fetch imports), no search-param trust in the session seam.
+- **No migration applied** during the M12.3 gates.
 
 ## M12.2 read models (implemented)
 
