@@ -352,7 +352,12 @@ async function handleGroupText(
   }
   if (parsed.kind === "dashboard") {
     const reply = await handleDashboardInstruction({ user }, { repo: deps.repo });
-    await ctx.reply(reply.text);
+    if (reply.buttonUrl !== null) {
+      const keyboard = new InlineKeyboard().url("Open dashboard", reply.buttonUrl);
+      await ctx.reply(reply.text, { reply_markup: keyboard });
+    } else {
+      await ctx.reply(reply.text);
+    }
     return;
   }
 }

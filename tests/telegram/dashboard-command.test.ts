@@ -36,7 +36,7 @@ describe("/dashboard command parsing", () => {
 });
 
 describe("/dashboard Telegram flow", () => {
-  it("active owner, approver, and member receive a one-time dashboard link", async () => {
+  it("active owner, approver, and member receive a one-time link as an inline keyboard button", async () => {
     for (const [userId, role] of [
       [OWNER, "owner"],
       [APPROVER, "approver"],
@@ -49,21 +49,28 @@ describe("/dashboard Telegram flow", () => {
         { repo, now: () => new Date(NOW), appUrl: APP_URL },
       );
       assert.equal(reply.outcome, "link_issued", role);
-      assert.match(reply.text, /OPEN YOUR DASHBOARD/);
-      assert.match(reply.text, new RegExp(`${APP_URL.replace(".", "\\.")}\\/auth\\/telegram-link\\?token=`));
+      // The URL lives ONLY on the inline keyboard button.
+      assert.ok(reply.buttonUrl !== null, role);
+      assert.match(reply.buttonUrl ?? "", new RegExp(`${APP_URL.replace(".", "\\.")}\\/auth\\/telegram-link\\?token=`));
+      // Plain message text carries safe copy and never the raw link/token.
+      assert.match(reply.text, /Open your Solvo dashboard\./);
       assert.match(reply.text, /expires in 10 minutes and can be used once\./);
       assert.match(reply.text, /Valid until/);
+      assert.ok(!reply.text.includes("token="), "raw token printed in plain text");
+      assert.ok(!reply.text.includes("telegram-link"), "raw link printed in plain text");
       assert.equal(repo.dashboardLoginTokens.size, 1);
       const stored = [...repo.dashboardLoginTokens.values()][0];
       assert.equal(stored.workspace_id, workspaceId);
       assert.equal(stored.telegram_user_id, userId);
       assert.equal(stored.role, role);
-      // The raw token appears in the reply but never in storage.
-      assert.ok(!JSON.stringify(stored).includes(reply.text.split("token=")[1].trim()));
+      // The raw token appears only in the button URL and never in storage.
+      const token = (reply.buttonUrl ?? "").split("token=")[1];
+      assert.ok(token.length > 0);
+      assert.ok(!JSON.stringify(stored).includes(token));
     }
   });
 
-  it("denied shapes (private chat, nonmember, inactive, no workspace, judge mode) share one generic reply", async () => {
+  it("denied shapes (private chat, nonmember, inactive, no workspace, judge mode) share one generic reply with no button", async () => {
     const cases: Array<{ name: string; setup: (repo: MemoryRepository) => Promise<unknown>; userOverride: Partial<TelegramUser> }> = [
       { name: "private chat", setup: () => Promise.resolve(null), userOverride: { chatType: "private" } },
       { name: "nonmember", setup: (repo) => makeCommunity(repo), userOverride: { userId: OUTSIDER } },
@@ -82,6 +89,7 @@ describe("/dashboard Telegram flow", () => {
       );
       assert.equal(reply.outcome, "unavailable", testCase.name);
       assert.equal(reply.text, "Dashboard unavailable. Ask a workspace owner to add you, then try /dashboard again.", testCase.name);
+      assert.equal(reply.buttonUrl, null, `${testCase.name}: denied reply carries a button`);
       if (deniedText === null) deniedText = reply.text;
       else assert.equal(reply.text, deniedText, "every denied shape must use identical copy");
       assert.equal(repo.dashboardLoginTokens.size, 0, testCase.name);
@@ -96,8 +104,11 @@ describe("/dashboard Telegram flow", () => {
       { repo, now: () => new Date(NOW), appUrl: APP_URL },
     );
     assert.equal(reply.outcome, "link_issued");
-    assert.ok(!reply.text.includes(workspaceId), "workspace id leaked");
-    assert.ok(!reply.text.includes(MEMBER), "member id leaked");
+    assert.ok(reply.buttonUrl !== null);
+    for (const value of [reply.text, reply.buttonUrl ?? ""]) {
+      assert.ok(!value.includes(workspaceId), "workspace id leaked");
+      assert.ok(!value.includes(MEMBER), "member id leaked");
+    }
     assert.ok(!reply.text.includes("member"), "no member references");
   });
 
@@ -117,5 +128,10 @@ describe("/dashboard Telegram flow", () => {
     const source = readFileSync("src/server/telegram/flows/dashboard-flow.ts", "utf8");
     assert.equal(source.includes("console.log"), false);
     assert.equal(source.includes("console.error"), false);
+  });
+
+  it("the bot renders the dashboard reply with an inline URL keyboard button", () => {
+    const bot = readFileSync("src/server/telegram/bot.ts", "utf8");
+    assert.match(bot, /InlineKeyboard\(\)\.url\("Open dashboard", reply\.buttonUrl\)/);
   });
 });

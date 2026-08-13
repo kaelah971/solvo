@@ -10,7 +10,8 @@ import type { TelegramUser } from "../types.ts";
  * member. Every denied shape — private chat, unknown chat workspace, non-
  * community mode, non-member, inactive member — returns the SAME generic
  * unavailable copy (no workspace/member existence leak). The raw login token
- * appears exactly once in the reply and is never logged or stored.
+ * appears exactly once, inside an inline keyboard URL button, and is never
+ * printed in the plain message text, logged, or stored.
  */
 export type DashboardFlowDeps = {
   repo: SolvoRepository;
@@ -22,6 +23,8 @@ export type DashboardFlowDeps = {
 
 export type DashboardFlowReply = {
   text: string;
+  /** One-time auth URL rendered ONLY as an inline keyboard button. */
+  buttonUrl: string | null;
   outcome: "link_issued" | "unavailable";
 };
 
@@ -29,12 +32,10 @@ export function dashboardUnavailableMessage(): string {
   return "Dashboard unavailable. Ask a workspace owner to add you, then try /dashboard again.";
 }
 
-export function dashboardLoginLinkMessage(link: string, expiresAt: string): string {
+export function dashboardLoginLinkMessage(expiresAt: string): string {
   const expiry = `${expiresAt.replace("T", " ").slice(0, 19)} UTC`;
   return [
-    "OPEN YOUR DASHBOARD",
-    "",
-    link,
+    "Open your Solvo dashboard.",
     "",
     `This link expires in ${DASHBOARD_LOGIN_EXPIRY_MINUTES} minutes and can be used once.`,
     `Valid until ${expiry}.`,
@@ -47,6 +48,7 @@ export async function handleDashboardInstruction(
 ): Promise<DashboardFlowReply> {
   const unavailable = (): DashboardFlowReply => ({
     text: dashboardUnavailableMessage(),
+    buttonUrl: null,
     outcome: "unavailable",
   });
 
@@ -73,7 +75,8 @@ export async function handleDashboardInstruction(
   if (!created.ok) return unavailable();
 
   return {
-    text: dashboardLoginLinkMessage(created.link, created.expiresAt),
+    text: dashboardLoginLinkMessage(created.expiresAt),
+    buttonUrl: created.link,
     outcome: "link_issued",
   };
 }
