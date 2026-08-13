@@ -4,11 +4,84 @@ Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
 Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
 login bridge + M12.5 payout/batch pages + M12.6 claim pages + M12.7
-recipients/members pages + M12.8 policies page implemented.** The operator
-console is specified; read models, the `/app` overview, the Telegram → web
-login flow, the payout/batch pages, the claim pages, the directory pages,
-and the policies page ship. No admin actions exist yet, and no migrations
-were applied.
+recipients/members pages + M12.8 policies page + M12.9 agent-runs/audit
+pages implemented.** The operator console is specified; read models, the
+`/app` overview, the Telegram → web login flow, the payout/batch pages, the
+claim pages, the directory pages, the policies page, and the observability
+pages ship. No admin actions exist yet, and no migrations were applied.
+
+## M12.9 agent-runs and audit pages (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.8):
+
+- **Routes added**: `/app/agent-runs`, `/app/agent-runs/[id]`, and
+  `/app/audit` — all server-rendered (`force-dynamic`), read-only, and gated
+  by the same M12.3/M12.4 session flow (signed cookie → repo re-check of
+  ACTIVE same-workspace membership → gated page model). The dashboard shell
+  nav now links Overview / Payouts / Batches / Claims / Recipients /
+  Members / Policies / Agent Runs / Audit (+ Sign out); no links exist for
+  unimplemented sections (approvals/settings remain future slices).
+- **Read-only behavior**: no forms, buttons, server actions, or client
+  handlers anywhere on the observability pages. No filters beyond the
+  read-model's built-in pagination options (visual-only timeline).
+- **Workspace/session gate**: no session, unknown workspace, non-member,
+  inactive member, and no-DB all render the single generic
+  `DashboardUnavailable` panel. Unknown or cross-workspace run ids render
+  the single generic `DashboardNotFound` panel (no run existence leak).
+- **Agent-runs observability-only behavior**: list + detail render only the
+  M12.2 bounded view fields — run id (short display id), timestamps,
+  surface label, provider label (the one documented place the operator
+  "provider" term is allowed), status/intent/decision labels, redacted user
+  text, safe error summary, and linked payout/claim references. Detail page
+  links to `/app/payouts/[id]` or `/app/claims/[id]` ONLY after the page
+  model verifies the linked entity row lives in the same workspace — a
+  stale/foreign reference renders as plain "None", never a link. No raw
+  provider/interpretation/decision/candidates JSON, no internal prompts, no
+  secrets, and no transaction truth from `agent_runs`. Truth copy:
+  "Agent runs explain how Solvo interpreted a request." / "Agent runs are
+  not payment proof." / "Payment truth comes from payouts, claim links, and
+  execution pipeline rows." / the `AGENT_RUNS_TRUTH_NOTE` constant.
+  Empty state: "No agent requests recorded yet."
+- **Audit safe timeline behavior**: newest-first timeline of whitelisted
+  `AuditView` rows — event label, timestamp, masked actor, source family
+  (PAYOUT/CLAIM/AGENT/WORKSPACE/SYSTEM), safe short entity reference
+  (`Payout 1234abcd` / `Claim 1234abcd`), and a one-line whitelisted
+  metadata summary (amount/total/count/masked recipient/reason — never the
+  raw metadata blob). Truth copy: "Audit events show what Solvo recorded." /
+  "Audit events do not create payment proof by themselves." / "Payment proof
+  appears only when the execution pipeline recorded a transaction." Empty
+  state: "No audit events recorded yet."
+- **Truthfulness/security preserved**: no raw tokens/hashes/prefixes, no
+  provider output, no KeeperHub payloads, no secrets/env values, no DB URLs/
+  API keys/bot tokens (secret-marker scan on pages + models), no fake
+  operational data, no cross-workspace rows, no tx hashes on any
+  observability page, no admin action buttons. The agent-runs pages are the
+  documented source-contract exception for the operator "provider" label
+  (design §13); the audit page enforces the full banned-vocabulary list.
+- **Page model** (`src/server/dashboard/observability-page.ts`):
+  `buildAgentRunListPageModel` / `buildAgentRunDetailPageModel` (with
+  same-workspace link verification) / `buildAuditPageModel` + pure display
+  helpers (`shortRunId`, `agentRunSurfaceLabel`, `agentRunIntentLabel`,
+  `auditSourceLabel`, `auditEntityLabel`, `auditSummaryLabel`); reuses
+  `agentRunStatusLabel` / `agentRunDecisionLabel` / `auditEventLabel` from
+  the overview page model.
+- **Tests** (+28): page-model tests for gating (owner/approver/member
+  render, nonmember/inactive identical unavailable), workspace scoping,
+  honest empty states, provider/status/intent/decision labels, redacted
+  text, no raw JSON/secret/execution material in serialized models, detail
+  same-workspace rendering + cross-workspace/unknown rejection, verified
+  same-workspace payout/claim links, audit source families + entity refs +
+  safe summaries only, no raw metadata keys, no execution ids/secret
+  markers, JSON serializability; route source-contract tests (forbidden
+  imports, truthful copy, empty states, no buttons/forms/server actions,
+  banned terms with the documented provider-label exception, secret
+  markers, no tx truth on observability pages, model-verified link guards,
+  generic not-found/unavailable panels, shell nav includes Agent Runs +
+  Audit). `tests/dashboard/payout-route-source.test.ts` nav assertion
+  updated: Agent Runs and Audit are now linked sections.
+- **No actions/execution**: the observability pages execute nothing and
+  approve nothing; no migrations were applied during the M12.9 gates
+  (0013/0014 remain unapplied).
 
 ## M12.8 policies page (implemented)
 
