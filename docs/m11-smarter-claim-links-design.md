@@ -2,7 +2,38 @@
 
 Date: 2026-08-13
 Branch: `feature/smarter-claim-links`
-Status: **Design + M11.2 read model + M11.3 Telegram status UX + M11.4 web claim UX implemented.**
+Status: **Design + M11.2–M11.5 implemented (read model, Telegram UX, web UX, expiry/reissue rules).**
+
+## M11.5 expiry/reissue rules (implemented)
+
+Implemented in `src/server/claim/reissue.ts` (migration `0013_claim_reissue.sql`;
+tests: `tests/claim/claim-reissue.test.ts`). Service only — no Telegram/web
+reissue command wiring yet.
+
+- **Expiry computation** — `expired` is always computed from `expires_at` vs
+  `nowIso`, never persisted. A pending claim past its deadline reads `expired`
+  and cannot be claimed or approved; claimed/approved/completed claims keep
+  their state past the deadline (expiry applies only to `created`).
+- **Expired submit behavior** — submitting a wallet to an expired claim fails
+  with `expired`; no payout, payout item, or execution attempt is created, and
+  the web page + Telegram status both keep no-submit / no-funds-moved copy.
+- **Reissue = new claim/token** — `reissueClaimLink` creates a NEW claim row
+  (new id, new token hash, new expiry, same amount/currency/network/workspace/
+  requester) and returns the new 192-bit raw token exactly once. Each explicit
+  reissue creates a distinct link; the result never carries the token hash or
+  prefix.
+- **Old claim never resurrected** — the old claim row is never mutated: it
+  stays `created` (reading `expired`) or `cancelled`, its token stays
+  unusable, and its id keeps reading the old state. The audit trail records
+  `claim_reissued` with old/new claim ids.
+- **No approval/execution during reissue** — reissue creates no payout, no
+  payout item, no execution attempt, and makes no KeeperHub call.
+- **Role/workspace gate** — only an ACTIVE owner or approver of the SAME
+  workspace may reissue; unknown id, wrong workspace, inactive member,
+  non-member, and plain members all collapse to one generic `denied` result
+  (no existence leak). Claimed/approved/executed claims are `ineligible`.
+- **Still no claim-link batches** — batches remain a design-only slice
+  (M11.6).
 
 ## M11.4 web claim UX (implemented)
 
@@ -155,9 +186,9 @@ Conservative v1 target:
    `executed` (completed, proof only from the payout pipeline).
 3. **Claim expiry visibility** — every created claim summary shows the
    expiry; expired claims read as `expired` regardless of stored status.
-4. **Claim reissue flow — design only** (M11.5): a reissued claim is a fresh
-   claim link; the old one is never resurrected. Implementation lands only if
-   the read model is stable.
+4. **Claim reissue flow — service implemented** (M11.5): a reissued claim is
+   a fresh claim link (new row/token); the old one is never resurrected.
+   Telegram/web reissue command wiring is deferred.
 5. **Per-recipient claim-link batches — designed, not implemented** (M11.6):
    `create 3 claim links of 0.01 USDC each` and `turn unresolved batch
    recipients into claim links` are specced with all-or-clarify semantics;
@@ -382,7 +413,8 @@ contract. Concrete checks (≥ 40):
 - **M11.4 — web claim state UX polish:** expired/approved/completed/cancelled
   panel copy + payout reference, validation copy; web tests (items 25–34). ✅ DONE
 - **M11.5 — expiry/reissue rules:** expiry visibility everywhere; reissue =
-  new claim design contract enforced by tests (items 42–46).
+  new claim design contract enforced by tests (items 42–46). ✅ DONE (service
+  + tests; Telegram/web reissue command wiring deferred)
 - **M11.6 — per-recipient claim-link batch DESIGN** (doc + corpus
   expectations only, no implementation): all-or-clarify semantics, per-link
   idempotency keys, N claim rows.
