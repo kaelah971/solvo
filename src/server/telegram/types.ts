@@ -52,6 +52,12 @@ export type StatusInstruction = {
   payoutId: string;
 };
 
+export type ClaimStatusInstruction = {
+  kind: "claim_status";
+  /** null when the command was sent without a claim id (ask for it). */
+  claimId: string | null;
+};
+
 export type WorkspaceInitInstruction = {
   kind: "workspace_init";
 };
@@ -88,6 +94,7 @@ export type Instruction =
   | JudgePayInstruction
   | ClaimPayInstruction
   | StatusInstruction
+  | ClaimStatusInstruction
   | WorkspaceInitInstruction
   | MemberAddInstruction
   | MemberRemoveInstruction

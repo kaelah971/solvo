@@ -15,7 +15,7 @@ import { helpMessage } from "../../src/server/telegram/messages.ts";
 
 type FakeBot = Pick<Bot, "api">;
 
-const IMPLEMENTED = ["start", "help", "pay", "status", "judgepay", "workspace", "member", "recipient", "batch", "claimpay"];
+const IMPLEMENTED = ["start", "help", "pay", "status", "judgepay", "workspace", "member", "recipient", "batch", "claimpay", "claimstatus"];
 const DEFERRED = ["distribute", "send", "claim", "judge", "withdraw", "limits", "admin"];
 
 describe("command source of truth", () => {
@@ -52,7 +52,7 @@ describe("scoped command menus", () => {
   it("private scope contains only private-safe commands", () => {
     const names = privateScopeCommands().map((command) => command.name);
     assert.deepEqual([...names].sort(), ["help", "judgepay", "pay", "start", "status"]);
-    for (const communityOnly of ["workspace", "member", "recipient", "batch", "claimpay"]) {
+    for (const communityOnly of ["workspace", "member", "recipient", "batch", "claimpay", "claimstatus"]) {
       assert.ok(!names.includes(communityOnly), `/${communityOnly} must not appear in private chats`);
     }
   });

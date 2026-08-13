@@ -13,6 +13,7 @@ import { handleCommunityPayInstruction } from "./flows/community-pay-flow.ts";
 import { handleCommunityBatchInstruction } from "./flows/community-batch-flow.ts";
 import { handleJudgePayInstruction } from "./flows/judge-flow.ts";
 import { handleClaimPayInstruction } from "./flows/claim-flow.ts";
+import { handleClaimStatusInstruction } from "./flows/claim-status-flow.ts";
 import { handleAgentGroupText } from "./flows/agent-flow.ts";
 import { handleClaimApprovalCallbackUpdate } from "./flows/claim-approval-orchestration.ts";
 import { handleApprovalCallbackUpdate } from "./flows/approval-orchestration.ts";
@@ -185,7 +186,8 @@ async function handlePrivateText(
     parsed.kind === "recipient_list" ||
     parsed.kind === "pay_alias" ||
     parsed.kind === "batch" ||
-    parsed.kind === "claim_pay"
+    parsed.kind === "claim_pay" ||
+    parsed.kind === "claim_status"
   ) {
     await ctx.reply("This command only works inside an initialized group workspace.");
     return;
@@ -338,6 +340,11 @@ async function handleGroupText(
   }
   if (parsed.kind === "claim_pay") {
     const reply = await handleClaimPayInstruction({ instruction: parsed, user }, { repo: deps.repo });
+    await ctx.reply(reply.text);
+    return;
+  }
+  if (parsed.kind === "claim_status") {
+    const reply = await handleClaimStatusInstruction({ claimId: parsed.claimId, user }, { repo: deps.repo });
     await ctx.reply(reply.text);
     return;
   }

@@ -2,13 +2,42 @@
 
 Date: 2026-08-13
 Branch: `feature/smarter-claim-links`
-Status: **Design + M11.2 read model implemented. Telegram/web UX not yet built.**
+Status: **Design + M11.2 read model + M11.3 Telegram status UX implemented. Web UX not yet built.**
+
+## M11.3 Telegram status UX (implemented)
+
+Implemented in `src/server/telegram/flows/claim-status-flow.ts` (wire-up in
+`bot.ts`/`parsing.ts`, builders in `src/server/claim/messages.ts`, command in
+`src/server/telegram/commands.ts`; tests: `tests/telegram/claim-status.test.ts`).
+
+- **`/claimstatus <claim-id>`** — deterministic community command (group chats
+  only; private chats get the generic group-only reply). Missing claim id asks
+  for one (`CLAIM STATUS COMMAND` + usage), creating nothing.
+- **NL status phrases** — `check claim <id>`, `claim status <id>`,
+  `what happened to claim <id>`, `is claim <id> claimed|expired|...` route to
+  the same read-only flow; amount-shaped tokens (`claim 0.01 USDC`) never
+  route to status and claim-link creation via the agent flow is unchanged.
+  Slash commands keep priority and never reach the agent flow.
+- **Per-state copy** — `CLAIM STATUS FOUND` (pending), `CLAIM CLAIMED —
+  APPROVAL REQUIRED` (masked wallet, approval copy), `CLAIM EXPIRED`,
+  `CLAIM REJECTED`, `CLAIM APPROVED — PAYMENT PREPARED`, `CLAIM COMPLETED`
+  (tx hash/BaseScan only when the read model provides pipeline proof),
+  `CLAIM STATUS NOT CONFIRMED` (executed claim without pipeline proof).
+- **No-leak behavior** — not found / wrong workspace / inactive member /
+  non-member / no eligible workspace all get the SAME generic
+  `CLAIM STATUS UNAVAILABLE` reply; claim ids, wallets, and amounts never leak.
+- **Read-only/no-mutation guarantee** — status reads create no payout, claim,
+  audit, execution, or agent-run rows and never call KeeperHub, webhooks, or a
+  model provider.
+- **Pipeline-only proof** — completion and hashes come exclusively from the
+  M11.2 read model (payout pipeline); forged agent_runs cannot inject
+  completion or hashes.
 
 ## M11.2 read model (implemented)
 
 Implemented in `src/server/claim/status.ts` (tests: `tests/claim/claim-status.test.ts`).
-Read-only claim status service; no M11.3+ surfaces (Telegram `/claimstatus`, web
-polish, reissue, batches) are wired to it yet.
+Read-only claim status service; M11.3 wired the Telegram `/claimstatus` and NL
+status routes to it. Web polish, reissue, and batches remain future M11.x slices.
 
 - **Effective statuses** — `pending` (created, not expired), `claimed` (wallet
   recorded, approval required), `approved` (payout/payment-prepared linked),
@@ -312,10 +341,10 @@ contract. Concrete checks (≥ 40):
 
 - **M11.2 — claim status service/read model:** `claimStatus(claim, workspace,
   nowIso)` read model + `getClaimStatusForMember` (same-workspace active
-  member gate, no-leak otherwise) + unit tests (items 1–12).
+  member gate, no-leak otherwise) + unit tests (items 1–12). ✅ DONE
 - **M11.3 — Telegram claim status UX:** `/claimstatus <id>` command route,
   NL `check claim <id>` intent, canonical per-state builders in
-  `claim/messages.ts`, routing + truthfulness tests (items 13–24).
+  `claim/messages.ts`, routing + truthfulness tests (items 13–24). ✅ DONE
 - **M11.4 — web claim state UX polish:** expired/approved/completed/cancelled
   panel copy + payout reference, validation copy; web tests (items 25–34).
 - **M11.5 — expiry/reissue rules:** expiry visibility everywhere; reissue =

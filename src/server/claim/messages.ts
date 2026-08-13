@@ -1,4 +1,5 @@
 import type { ClaimLinkRow, WorkspaceRow } from "../db/types.ts";
+import type { ClaimEffectiveStatus, ClaimStatusView } from "./status.ts";
 import { baseUnitsToUsdc } from "../execution/money.ts";
 
 export function claimCreatedMessage(
@@ -131,4 +132,103 @@ export function claimCallbackSelfApprovalMessage(): { answer: string } {
 
 export function claimCallbackWrongChatMessage(): { answer: string } {
   return { answer: "This claim belongs to a different chat." };
+}
+
+// ── M11.3 claim status replies ─────────────────────────────────────────────
+
+const CLAIM_STATUS_HEADERS: Record<ClaimEffectiveStatus, string> = {
+  pending: "CLAIM STATUS FOUND",
+  claimed: "CLAIM CLAIMED — APPROVAL REQUIRED",
+  approved: "CLAIM APPROVED — PAYMENT PREPARED",
+  rejected: "CLAIM REJECTED",
+  expired: "CLAIM EXPIRED",
+  completed: "CLAIM COMPLETED",
+  unknown: "CLAIM STATUS NOT CONFIRMED",
+};
+
+const CLAIM_STATUS_LABELS: Record<ClaimEffectiveStatus, string> = {
+  pending: "PENDING",
+  claimed: "CLAIMED",
+  approved: "APPROVED",
+  rejected: "REJECTED",
+  expired: "EXPIRED",
+  completed: "COMPLETED",
+  unknown: "NOT CONFIRMED",
+};
+
+const CLAIM_STATUS_COPY: Record<ClaimEffectiveStatus, string[]> = {
+  pending: ["No wallet has been entered yet.", "No funds have moved."],
+  claimed: [
+    "No funds move when a wallet is entered.",
+    "An owner or approver must approve the exact claimed destination before KeeperHub execution.",
+  ],
+  approved: [
+    "Approval has prepared the payment.",
+    "KeeperHub execution/proof only appears after the execution pipeline completes.",
+  ],
+  rejected: ["No funds moved from this rejected claim."],
+  expired: ["The claim link can no longer be used.", "No funds moved from this expired claim."],
+  completed: ["Payment completed per the payout pipeline."],
+  unknown: [
+    "The claim row says executed, but the payout pipeline does not confirm completion.",
+    "No proof is available.",
+  ],
+};
+
+function formatExpiry(expiresAtIso: string): string {
+  return `${expiresAtIso.replace("T", " ").slice(0, 19)} UTC`;
+}
+
+/** /claimstatus without a claim id. */
+export function claimStatusUsageMessage(): string {
+  return [
+    "CLAIM STATUS COMMAND",
+    "",
+    "I need a claim id to check.",
+    "Usage: /claimstatus <claim-id>",
+  ].join("\n");
+}
+
+/**
+ * Generic no-leak reply: claim not found, wrong workspace, inactive member,
+ * non-member, or a chat without an eligible workspace all get the SAME text
+ * so claim existence never leaks across workspaces or members.
+ */
+export function claimStatusUnavailableMessage(): string {
+  return [
+    "CLAIM STATUS UNAVAILABLE",
+    "",
+    "I couldn't find a claim status available to this workspace.",
+  ].join("\n");
+}
+
+/**
+ * Per-state claim status reply built ONLY from the read-model view
+ * (`ClaimStatusView`). The view itself is pipeline-truthful: tx proof appears
+ * only when the payout pipeline confirms completion; nothing here can invent
+ * a hash. Raw token, token hash, prefix and idempotency keys are never shown.
+ */
+export function claimStatusFoundMessage(view: ClaimStatusView): string {
+  const lines = [
+    CLAIM_STATUS_HEADERS[view.effectiveStatus],
+    "",
+    `CLAIM ID     ${view.claimId}`,
+    `AMOUNT       ${view.amount} ${view.currency}`,
+    `STATE        ${CLAIM_STATUS_LABELS[view.effectiveStatus]}`,
+    `EXPIRES      ${formatExpiry(view.expiresAt)}`,
+  ];
+  if (view.claimedWallet !== null) {
+    lines.push(`WALLET       ${view.claimedWallet}`);
+  }
+  if (view.payoutId !== null) {
+    lines.push(`PAYOUT       ${view.payoutId}`);
+  }
+  if (view.effectiveStatus === "completed" && view.txHash !== null) {
+    lines.push(`TX HASH      ${view.txHash}`);
+    if (view.txExplorerUrl !== null) {
+      lines.push(`BASESCAN     ${view.txExplorerUrl}`);
+    }
+  }
+  lines.push("", ...CLAIM_STATUS_COPY[view.effectiveStatus]);
+  return lines.join("\n");
 }

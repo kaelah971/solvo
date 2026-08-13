@@ -18,6 +18,9 @@ const NL_ALIAS = new RegExp(`^(?:send|pay)\\s+${AMOUNT}\\s+${TOKEN}\\s+to\\s+${A
 const NEGATIVE_AMOUNT = /^(?:send|pay)\s+-\d/;
 const LOOKS_LIKE_PAYMENT = /^(?:send|pay|transfer|give)\b/i;
 
+/** Claim-id token: UUID-shaped (hex + dashes) or a long id; never an amount. */
+const CLAIM_ID_TOKEN = "([A-Za-z0-9-]{8,64})";
+
 function toPayInstruction(
   address: string,
   amount: string,
@@ -230,6 +233,21 @@ export function parseInstruction(text: string, options: { botUsername?: string |
     };
   }
 
+  if (subject === "/claimstatus") {
+    return { kind: "claim_status", claimId: null };
+  }
+  const claimStatusCommand = /^\/claimstatus\s+(\S+)\s*$/.exec(subject);
+  if (claimStatusCommand) {
+    return { kind: "claim_status", claimId: claimStatusCommand[1] };
+  }
+  if (/^\/claimstatus\s+/.test(subject)) {
+    return {
+      kind: "failure",
+      reason: "Invalid claim status command.",
+      hint: "Use /claimstatus <claim-id>.",
+    };
+  }
+
   const batchMatch = /^\/batch\s*\n([\s\S]*)$/.exec(subject);
   if (batchMatch) {
     if (batchMatch[1].trim().length === 0) {
@@ -297,6 +315,22 @@ export function parseInstruction(text: string, options: { botUsername?: string |
       };
     }
     return needsAddressHint();
+  }
+
+  // M11.3 — deterministic claim-status NL. Read-only lookups by claim id;
+  // "claim 0.01 USDC" (amount-shaped) is never routed here and keeps
+  // reaching the agent/claim-link creation path.
+  const claimStatusPhrases = [
+    new RegExp(`^check\\s+claim\\s+${CLAIM_ID_TOKEN}\\s*$`, "i"),
+    new RegExp(`^claim\\s+status\\s+${CLAIM_ID_TOKEN}\\s*$`, "i"),
+    new RegExp(`^what\\s+happened\\s+to\\s+claim\\s+${CLAIM_ID_TOKEN}\\s*$`, "i"),
+    new RegExp(`^is\\s+claim\\s+${CLAIM_ID_TOKEN}\\s+(?:claimed|expired|approved|cancelled|rejected|completed|pending)\\s*\\??$`, "i"),
+  ];
+  for (const phrase of claimStatusPhrases) {
+    const match = phrase.exec(subject);
+    if (match && !/^\d+(?:\.\d+)?$/.test(match[1])) {
+      return { kind: "claim_status", claimId: match[1] };
+    }
   }
 
   return {
