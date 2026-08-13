@@ -1,5 +1,4 @@
-import type { Sql } from "postgres";
-import type { PendingQuery } from "postgres";
+import type { Fragment, PendingQuery, Sql } from "postgres";
 
 import { canTransition, StateTransitionError, type ExecutionState } from "../execution/state-machine.ts";
 import { isAgentRunTerminalOutcome, type AgentRunStatus } from "../agent/types.ts";
@@ -400,7 +399,7 @@ export class PostgresRepository implements SolvoRepository {
     const limit = clampDashboardLimit(options.limit);
     const statuses = options.status === undefined ? null : asStringList(options.status);
     const sourceTypes = options.sourceType === undefined ? null : asStringList(options.sourceType);
-    const where = whereFragment(this.sql, this.sql`p.workspace_id = ${workspaceId}`);
+    const where = whereFragment(this.sql`p.workspace_id = ${workspaceId}`);
     if (statuses !== null) where.append(this.sql` AND p.status::text = ANY(${statuses as string[]})`);
     if (sourceTypes !== null) where.append(this.sql` AND p.source_type::text = ANY(${sourceTypes as string[]})`);
     if (options.before !== undefined) {
@@ -432,7 +431,7 @@ export class PostgresRepository implements SolvoRepository {
   ): Promise<PayoutItemRow[]> {
     const limit = clampDashboardLimit(options.limit);
     const statuses = options.statuses === undefined ? null : options.statuses;
-    const where = whereFragment(this.sql, this.sql`p.workspace_id = ${workspaceId}`);
+    const where = whereFragment(this.sql`p.workspace_id = ${workspaceId}`);
     if (statuses !== null) where.append(this.sql` AND pi.status::text = ANY(${statuses as string[]})`);
     if (options.createdSinceIso !== undefined) where.append(this.sql` AND pi.created_at >= ${options.createdSinceIso}`);
     if (options.completedSinceIso !== undefined) {
@@ -457,7 +456,7 @@ export class PostgresRepository implements SolvoRepository {
   ): Promise<ClaimLinkRow[]> {
     const limit = clampDashboardLimit(options.limit);
     const statuses = options.status === undefined ? null : asStringList(options.status);
-    const where = whereFragment(this.sql, this.sql`workspace_id = ${workspaceId}`);
+    const where = whereFragment(this.sql`workspace_id = ${workspaceId}`);
     if (statuses !== null) where.append(this.sql` AND status::text = ANY(${statuses as string[]})`);
     if (options.before !== undefined) {
       where.append(this.sql` AND (created_at, id) < (${options.before}, ${options.beforeId ?? ""})`);
@@ -476,7 +475,7 @@ export class PostgresRepository implements SolvoRepository {
     options: ListAuditEventsOptions = {},
   ): Promise<AuditEventRow[]> {
     const limit = clampDashboardLimit(options.limit);
-    const where = whereFragment(this.sql, this.sql`workspace_id = ${workspaceId}`);
+    const where = whereFragment(this.sql`workspace_id = ${workspaceId}`);
     if (options.payoutId !== undefined) where.append(this.sql` AND payout_id = ${options.payoutId}`);
     if (options.payoutIds !== undefined) {
       where.append(this.sql` AND payout_id = ANY(${options.payoutIds})`);
@@ -501,7 +500,7 @@ export class PostgresRepository implements SolvoRepository {
     options: ListAgentRunsOptions = {},
   ): Promise<AgentRunRow[]> {
     const limit = clampDashboardLimit(options.limit);
-    const where = whereFragment(this.sql, this.sql`workspace_id = ${workspaceId}`);
+    const where = whereFragment(this.sql`workspace_id = ${workspaceId}`);
     if (options.before !== undefined) {
       where.append(this.sql` AND (created_at, id) < (${options.before}, ${options.beforeId ?? ""})`);
     }
@@ -519,7 +518,7 @@ export class PostgresRepository implements SolvoRepository {
     statuses: readonly ExecutionState[],
     createdSinceIso?: string,
   ): Promise<number> {
-    const where = whereFragment(this.sql, this.sql`p.workspace_id = ${workspaceId}`);
+    const where = whereFragment(this.sql`p.workspace_id = ${workspaceId}`);
     if (createdSinceIso !== undefined) where.append(this.sql` AND pi.created_at >= ${createdSinceIso}`);
     const rows = await this.sql<{ n: string }[]>`
       SELECT count(*) AS n
@@ -1136,18 +1135,27 @@ function asStringList<T extends string>(value: T | readonly T[]): string[] {
 }
 
 /**
- * postgres.js fragments support `.append()` for dynamic query composition at
- * runtime; the shipped type declarations omit it, so we surface it with a
- * narrow local type. The fragment stays a normal PendingQuery for
- * interpolation into the final query.
+ * Dynamic WHERE composition for postgres.js 3.x (installed: 3.4.9).
+ *
+ * Query fragments do NOT have `.append()` in this version — casting them to
+ * an "appendable fragment" type crashed every filtered dashboard list query
+ * with `TypeError: f.append is not a function`. postgres.js DOES natively
+ * flatten an ARRAY of Query fragments interpolated into a template (the
+ * serializer joins them with spaces — `Fragment[]` is even part of the
+ * shipped TypeScript types). So this "builder" is a real array of fragments
+ * with an `append` helper: callers keep `where.append(...)` and
+ * `WHERE ${where}` semantics unchanged, with zero fake casts.
  */
-type AppendableFragment = ReturnType<Sql["unsafe"]> & {
+type AppendableFragment = Array<ReturnType<Sql["unsafe"]> | Fragment> & {
   append(part: unknown): AppendableFragment;
 };
 
-function whereFragment<T extends readonly object[]>(
-  sql: Sql,
-  initial: ReturnType<Sql["unsafe"]> | PendingQuery<T>,
-): AppendableFragment {
-  return initial as unknown as AppendableFragment;
+/** Exported for tests: proves the builder yields a real appendable array. */
+export function whereFragment(initial: ReturnType<Sql["unsafe"]> | Fragment): AppendableFragment {
+  const parts = [initial] as AppendableFragment;
+  parts.append = (part: unknown): AppendableFragment => {
+    parts.push(part as ReturnType<Sql["unsafe"]> | Fragment);
+    return parts;
+  };
+  return parts;
 }
