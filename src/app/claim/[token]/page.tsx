@@ -4,8 +4,9 @@ import { ClaimPanel } from "@/components/ClaimPanel";
 import { PageShell } from "@/components/PageShell";
 import { SectionLabel } from "@/components/SectionLabel";
 import { getDbRepository } from "@/server/db/accessor";
-import { effectiveClaimStatus, getClaimByRawToken } from "@/server/claim/service";
-import { baseUnitsToUsdc } from "@/server/execution/money";
+import { getClaimByRawToken } from "@/server/claim/service";
+import { buildClaimStatusView } from "@/server/claim/status";
+import { buildClaimWebPage } from "@/server/claim/web";
 import { ClaimForm } from "./ClaimForm";
 
 export const metadata: Metadata = {
@@ -17,9 +18,11 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /**
- * Claim page. Read-only against the claim service: it never moves funds and
- * never creates a payout. Submitting a wallet only records the destination;
- * execution requires sender/approver approval of that exact address.
+ * Claim page (M11.4). Read-only against the M11.2 read model: claim truth
+ * comes from the claim row, completion/proof ONLY from the payout pipeline
+ * via the status view. Submitting a wallet only records the destination; the
+ * page can never approve, execute, or move funds, and never renders the raw
+ * token, its hash, or its prefix.
  */
 export default async function ClaimPage({
   params,
@@ -30,9 +33,20 @@ export default async function ClaimPage({
   const nowIso = new Date().toISOString();
 
   const repo = getDbRepository();
-  const lookup = repo ? await getClaimByRawToken(repo, token) : null;
 
-  // Unknown token: render the unavailable state truthfully (no fabricated data).
+  // Unknown token (or unavailable DB): render the unavailable state
+  // truthfully (no amount, no wallet, no workspace, no fabricated data).
+  if (repo === null) {
+    return (
+      <PageShell className="pt-10 md:pt-16">
+        <div className="mx-auto w-full max-w-3xl">
+          <ClaimPanel state="unavailable" />
+        </div>
+        <ClaimExplanation />
+      </PageShell>
+    );
+  }
+  const lookup = await getClaimByRawToken(repo, token);
   if (!lookup) {
     return (
       <PageShell className="pt-10 md:pt-16">
@@ -45,54 +59,69 @@ export default async function ClaimPage({
   }
 
   const { claim, workspace } = lookup;
-  const status = effectiveClaimStatus(claim, nowIso);
-  const amountUsdc = baseUnitsToUsdc(BigInt(claim.amount_base_units));
+  let payout: Awaited<ReturnType<typeof repo.getPayoutById>> = null;
+  let items: Awaited<ReturnType<typeof repo.getPayoutItemsByPayoutId>> = [];
+  if (claim.payout_id !== null) {
+    payout = await repo.getPayoutById(claim.payout_id);
+    items = payout ? await repo.getPayoutItemsByPayoutId(payout.id) : [];
+  }
+  const view = buildClaimStatusView({ claim, nowIso, payout, items });
+  const page = buildClaimWebPage(view);
 
   let panel: React.ReactNode;
-  switch (status) {
-    case "created":
+  switch (page.state) {
+    case "valid":
       panel = (
-        <ClaimPanel state="valid" token={claim.token_prefix}>
-          <ClaimForm token={token} amountUsdc={amountUsdc} />
+        <ClaimPanel state="valid">
+          <ClaimForm token={token} amountUsdc={page.amountUsdc} />
         </ClaimPanel>
       );
       break;
-    case "claimed":
+    case "waiting-approval":
       panel = (
-        <ClaimPanel state="waiting-approval" token={claim.token_prefix}>
-          <ClaimDetail label="Destination" value={claim.claimed_recipient ?? "—"} />
+        <ClaimPanel state="waiting-approval">
+          <ClaimDetail label="Destination" value={page.claimedWallet ?? "—"} />
         </ClaimPanel>
       );
       break;
     case "approved":
       panel = (
-        <ClaimPanel state="executing" token={claim.token_prefix}>
-          <ClaimDetail label="Destination" value={claim.claimed_recipient ?? "—"} />
+        <ClaimPanel state="approved">
+          {page.claimedWallet !== null && <ClaimDetail label="Destination" value={page.claimedWallet} />}
+          {page.payoutId !== null && <ClaimDetail label="Payment reference" value={page.payoutId} />}
         </ClaimPanel>
       );
       break;
-    case "executed":
+    case "completed":
       panel = (
-        <ClaimPanel state="completed" token={claim.token_prefix}>
-          <ClaimDetail label="Destination" value={claim.claimed_recipient ?? "—"} />
-          <ExecutedProof claimId={claim.id} payoutId={claim.payout_id} />
+        <ClaimPanel state="completed">
+          {page.claimedWallet !== null && <ClaimDetail label="Destination" value={page.claimedWallet} />}
+          {page.payoutId !== null && <ClaimDetail label="Payment reference" value={page.payoutId} />}
+          <ClaimProof txHash={page.txHash} txExplorerUrl={page.txExplorerUrl} />
         </ClaimPanel>
       );
+      break;
+    case "not-confirmed":
+      panel = <ClaimPanel state="not-confirmed" />;
       break;
     case "expired":
-      panel = <ClaimPanel state="expired" token={claim.token_prefix} />;
+      panel = <ClaimPanel state="expired" />;
       break;
     case "cancelled":
-      panel = <ClaimPanel state="cancelled" token={claim.token_prefix} />;
+      panel = <ClaimPanel state="cancelled" />;
       break;
     default:
-      panel = <ClaimPanel state="used" token={claim.token_prefix} />;
+      panel = <ClaimPanel state="unavailable" />;
   }
 
   return (
     <PageShell className="pt-10 md:pt-16">
       <div className="mx-auto w-full max-w-3xl">
-        <ClaimSummary amountUsdc={amountUsdc} workspaceName={workspace.name ?? workspace.id} />
+        <ClaimSummary
+          amountUsdc={page.amountUsdc}
+          workspaceName={workspace.name ?? workspace.id}
+          expiresAt={page.expiresAt}
+        />
         {panel}
       </div>
 
@@ -112,9 +141,17 @@ export default async function ClaimPage({
   );
 }
 
-function ClaimSummary({ amountUsdc, workspaceName }: { amountUsdc: string; workspaceName: string }) {
+function ClaimSummary({
+  amountUsdc,
+  workspaceName,
+  expiresAt,
+}: {
+  amountUsdc: string;
+  workspaceName: string;
+  expiresAt: string;
+}) {
   return (
-    <div className="mb-8 grid grid-cols-2 gap-4">
+    <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div className="hairline-top pt-3">
         <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">Amount</p>
         <p className="mt-1 font-data text-[14px] leading-[1.3] tracking-[0.04em] text-primary">
@@ -125,6 +162,12 @@ function ClaimSummary({ amountUsdc, workspaceName }: { amountUsdc: string; works
         <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">Network</p>
         <p className="mt-1 font-data text-[14px] leading-[1.3] tracking-[0.04em] text-primary">
           BASE · {workspaceName}
+        </p>
+      </div>
+      <div className="hairline-top pt-3">
+        <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">Expires</p>
+        <p className="mt-1 font-data text-[14px] leading-[1.3] tracking-[0.04em] text-primary">
+          {expiresAt.replace("T", " ").slice(0, 19)} UTC
         </p>
       </div>
     </div>
@@ -140,28 +183,29 @@ function ClaimDetail({ label, value }: { label: string; value: string }) {
   );
 }
 
-async function ExecutedProof({ claimId, payoutId }: { claimId: string; payoutId: string | null }) {
-  if (!payoutId) return null;
-  const repo = getDbRepository();
-  if (!repo) return null;
-  const payout = await repo.getPayoutById(payoutId);
-  const item = payout ? (await repo.getPayoutItemsByPayoutId(payoutId))[0] : null;
-  if (!item?.transaction_hash) return null;
-  void claimId;
+/**
+ * Completion proof. Rendered ONLY in the `completed` panel, which the page
+ * shows only when the M11.2 view carries a pipeline-confirmed hash — so this
+ * component never receives (and can never invent) a hash.
+ */
+function ClaimProof({ txHash, txExplorerUrl }: { txHash: string | null; txExplorerUrl: string | null }) {
+  if (txHash === null) return null;
   return (
     <div className="hairline-top mt-4 pt-4">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">Proof</p>
       <p className="data-break mt-2 font-data text-[11px] leading-[1.5] tracking-[0.04em] text-secondary">
-        TX {item.transaction_hash}
+        TX {txHash}
       </p>
-      <a
-        href={`https://basescan.org/tx/${item.transaction_hash}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-2 inline-block text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-primary underline-offset-4 hover:underline"
-      >
-        View on BaseScan
-      </a>
+      {txExplorerUrl !== null && (
+        <a
+          href={txExplorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-block text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-primary underline-offset-4 hover:underline"
+        >
+          View on BaseScan
+        </a>
+      )}
     </div>
   );
 }

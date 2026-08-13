@@ -2,7 +2,40 @@
 
 Date: 2026-08-13
 Branch: `feature/smarter-claim-links`
-Status: **Design + M11.2 read model + M11.3 Telegram status UX implemented. Web UX not yet built.**
+Status: **Design + M11.2 read model + M11.3 Telegram status UX + M11.4 web claim UX implemented.**
+
+## M11.4 web claim UX (implemented)
+
+Implemented in `src/app/claim/[token]/page.tsx` (state mapping in
+`src/server/claim/web.ts`, panel copy in `src/components/ClaimPanel.tsx`;
+tests: `tests/claim/claim-web-status.test.ts`).
+
+- **State coverage** — every M11.2 effective status maps to a web panel:
+  `pending → valid` (amount/network/expiry summary + wallet form), `claimed →
+  waiting-approval` (masked wallet, no re-submit), `approved → approved`
+  (payment prepared + payout reference), `completed → completed` (proof only
+  from the pipeline), stored-`executed` without pipeline proof →
+  `not-confirmed`, `expired`, `cancelled` (rejected), unknown token →
+  `unavailable`. The panel state list is pruned to exactly these truthful
+  states.
+- **No-leak unavailable copy** — an unknown token renders ONLY the generic
+  `CLAIM UNAVAILABLE` panel; no amount, wallet, or workspace summary is
+  rendered.
+- **Immutable claimed wallet** — the claimed destination is shown MASKED
+  (first 6 + last 4 chars) and the copy states it cannot be changed after
+  submission.
+- **Computed expiry** — expiry comes from the read model (`nowIso`), never
+  stored; the expired panel says the link can no longer be used and no funds
+  moved.
+- **Pipeline-only proof** — `completed` renders TX hash + BaseScan only when
+  the M11.2 view carries a pipeline-confirmed hash (`ClaimProof` receives the
+  hash, never reads the claim row). Approved/valid states contain no hash or
+  completion claims (locked by tests).
+- **No approval/execution from web claim entry** — submitting a wallet only
+  records the destination (existing `submitClaimRecipient`); the page creates
+  no payout, approval, or execution, and a forged agent_run cannot affect web
+  claim state. The raw token is never rendered after load (only the URL), and
+  the token hash/prefix are never shown.
 
 ## M11.3 Telegram status UX (implemented)
 
@@ -37,7 +70,8 @@ Implemented in `src/server/telegram/flows/claim-status-flow.ts` (wire-up in
 
 Implemented in `src/server/claim/status.ts` (tests: `tests/claim/claim-status.test.ts`).
 Read-only claim status service; M11.3 wired the Telegram `/claimstatus` and NL
-status routes to it. Web polish, reissue, and batches remain future M11.x slices.
+status routes to it and M11.4 wired the web claim page to it. Reissue and
+batches remain future M11.x slices.
 
 - **Effective statuses** — `pending` (created, not expired), `claimed` (wallet
   recorded, approval required), `approved` (payout/payment-prepared linked),
@@ -346,7 +380,7 @@ contract. Concrete checks (≥ 40):
   NL `check claim <id>` intent, canonical per-state builders in
   `claim/messages.ts`, routing + truthfulness tests (items 13–24). ✅ DONE
 - **M11.4 — web claim state UX polish:** expired/approved/completed/cancelled
-  panel copy + payout reference, validation copy; web tests (items 25–34).
+  panel copy + payout reference, validation copy; web tests (items 25–34). ✅ DONE
 - **M11.5 — expiry/reissue rules:** expiry visibility everywhere; reissue =
   new claim design contract enforced by tests (items 42–46).
 - **M11.6 — per-recipient claim-link batch DESIGN** (doc + corpus

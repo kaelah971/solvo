@@ -246,7 +246,7 @@ describe("claim status Telegram UX (M11.3) — slash command", () => {
   });
 
   it("9. a claim from another workspace returns the same generic no-leak reply", async () => {
-    const { repo, workspace } = await makeFixture();
+    const { repo } = await makeFixture();
     const otherWorkspace = await repo.createWorkspace({
       mode: "community",
       name: "Other WS",

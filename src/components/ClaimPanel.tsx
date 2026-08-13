@@ -5,12 +5,11 @@ export type ClaimState =
   | "unavailable"
   | "valid"
   | "expired"
-  | "used"
   | "waiting-approval"
-  | "executing"
+  | "approved"
   | "completed"
-  | "cancelled"
-  | "review-required";
+  | "not-confirmed"
+  | "cancelled";
 
 type ClaimPanelConfig = {
   badge: string;
@@ -19,6 +18,12 @@ type ClaimPanelConfig = {
   body: string;
 };
 
+/**
+ * M11.4 — truthful per-state web copy. Completion claims ("completed",
+ * "executed", "paid", "sent", hashes, proof) appear ONLY in the `completed`
+ * config, which the page renders solely when the M11.2 read model supplies
+ * pipeline-confirmed proof. Every other state describes what has NOT happened.
+ */
 const claimStates: Record<ClaimState, ClaimPanelConfig> = {
   unavailable: {
     badge: "CLAIM UNAVAILABLE",
@@ -30,85 +35,62 @@ const claimStates: Record<ClaimState, ClaimPanelConfig> = {
     badge: "CLAIM VALID",
     tone: "pending",
     headline: "Awaiting your destination address.",
-    body: "",
+    body: "No funds move when a wallet is entered. An owner or approver must approve the exact claimed destination before KeeperHub execution.",
   },
   expired: {
     badge: "CLAIM EXPIRED",
     tone: "error",
     headline: "This claim link has expired.",
-    body: "The link expired before a destination was approved. Nothing was moved, and the link cannot be extended.",
-  },
-  used: {
-    badge: "CLAIM ALREADY USED",
-    tone: "error",
-    headline: "This claim has already been claimed.",
-    body: "A claim link is single-use. It cannot be reused, redirected or claimed a second time.",
+    body: "The claim link can no longer be used. No funds moved from this expired claim.",
   },
   "waiting-approval": {
     badge: "WAITING FOR SENDER APPROVAL",
     tone: "pending",
     headline: "The sender must approve the destination.",
-    body: "The sender sees the exact address before anything moves. Execution begins only after that approval is given.",
+    body: "The claimed wallet cannot be changed after submission. An owner or approver must approve the exact destination before anything moves.",
   },
-  executing: {
-    badge: "APPROVED · PENDING EXECUTION",
+  approved: {
+    badge: "CLAIM APPROVED · PAYMENT PREPARED",
     tone: "pending",
-    headline: "Execution is confirming.",
-    body: "Execution is still confirming. Solvo will update this page when the state changes.",
+    headline: "Approval has prepared the payment.",
+    body: "KeeperHub execution/proof only appears after the execution pipeline completes.",
   },
   completed: {
     badge: "PAYMENT COMPLETED",
     tone: "complete",
     headline: "Payment completed.",
-    body: "Proof is the success state. The transaction hash and audit record outrank any celebration.",
+    body: "Payment completed per the payout pipeline. The transaction hash is shown above.",
+  },
+  "not-confirmed": {
+    badge: "CLAIM NOT CONFIRMED",
+    tone: "pending",
+    headline: "Completion is not confirmed.",
+    body: "This claim cannot be confirmed yet. The payout pipeline holds no completion record.",
   },
   cancelled: {
-    badge: "CLAIM CANCELLED",
+    badge: "CLAIM REJECTED",
     tone: "error",
-    headline: "This claim was cancelled.",
-    body: "The sender or an approver cancelled this claim before execution. Nothing was moved and the link cannot be reused.",
-  },
-  "review-required": {
-    badge: "REVIEW REQUIRED",
-    tone: "error",
-    headline: "This payment requires review.",
-    body: "The transaction was not completed. No automatic retry was attempted because the failure requires review.",
+    headline: "This claim was rejected.",
+    body: "The sender or an approver cancelled this claim before execution. No funds moved from this rejected claim, and the link cannot be reused.",
   },
 };
 
 type ClaimPanelProps = {
   state: ClaimState;
-  token?: string;
   children?: React.ReactNode;
 };
 
 /**
  * Reusable claim-state panel. Every state is a truthful written status with a
  * fixed headline and explanation; no state is ever invented from the token.
- * The token, when present, is shown in full with data-break so it can never
- * break the layout or hide the reference. The "valid" state exposes a children
- * slot for the destination input and approval controls, rendered by the page.
+ * The "valid" state exposes a children slot for the destination input,
+ * rendered by the page.
  */
-export function ClaimPanel({ state, token, children }: ClaimPanelProps) {
+export function ClaimPanel({ state, children }: ClaimPanelProps) {
   const config = claimStates[state];
 
   return (
-    <StatePanel
-      badge={config.badge}
-      tone={config.tone}
-      headline={config.headline}
-      body={config.body}
-    >
-      {token && (
-        <div className="hairline-top pt-4">
-          <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">
-            Claim
-          </p>
-          <p className="data-break mt-2 font-data text-[11px] leading-[1.5] tracking-[0.04em] text-secondary">
-            {token}
-          </p>
-        </div>
-      )}
+    <StatePanel badge={config.badge} tone={config.tone} headline={config.headline} body={config.body}>
       {state === "valid" && children}
     </StatePanel>
   );
