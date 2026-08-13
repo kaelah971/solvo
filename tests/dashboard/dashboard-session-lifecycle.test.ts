@@ -104,18 +104,6 @@ async function gateThen(
   return build(repo, required.ctx);
 }
 
-function deniedCtx(workspaceId: string): Parameters<typeof buildOverviewPageModel>[1] {
-  return {
-    workspaceId,
-    telegramUserId: OUTSIDER,
-    memberId: null,
-    role: null,
-    status: null,
-    mode: null,
-    nowIso: FIVE_MIN,
-  };
-}
-
 describe("dashboard session lifecycle — P0 (Batches must never invalidate the session)", () => {
   it("1. a valid launch establishes a durable session; the launch token stays single-use", async () => {
     const repo = new MemoryRepository();
@@ -188,7 +176,7 @@ describe("dashboard session lifecycle — P0 (Batches must never invalidate the 
 
   it("3. an unauthenticated direct visit to a protected section is unavailable (never public)", async () => {
     const repo = new MemoryRepository();
-    const { workspaceId } = await launch(repo);
+    await launch(repo);
 
     const missing = await requireDashboardContext({ repo, session: null, nowIso: FIVE_MIN });
     assert.deepEqual(missing, { ok: false });

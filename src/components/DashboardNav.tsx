@@ -69,13 +69,19 @@ export function DashboardNav({ sections }: { sections: readonly DashboardSection
         );
       })}
 
-      <Link
-        href="/auth/logout"
-        onClick={() => setOpen(false)}
-        className="shrink-0 rounded-lg px-3 py-2.5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.16em] text-muted transition-colors hover:bg-white/[0.035] hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff6a00] md:mt-auto md:w-full md:px-4 md:py-3"
+      <form
+        action="/auth/logout"
+        method="post"
+        className="shrink-0 md:mt-auto md:w-full"
+        aria-label="Sign out"
       >
-        Sign out
-      </Link>
+        <button
+          type="submit"
+          className="w-full rounded-lg px-3 py-2.5 text-left text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.16em] text-muted transition-colors hover:bg-white/[0.035] hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff6a00] md:px-4 md:py-3"
+        >
+          Sign out
+        </button>
+      </form>
     </nav>
     </>
   );

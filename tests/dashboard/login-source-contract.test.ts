@@ -13,6 +13,7 @@ const LOGIN_SOURCE_FILES = [
   "src/server/dashboard/login-links.ts",
   "src/server/dashboard/session.ts",
   "src/server/dashboard/auth-exchange.ts",
+  "src/server/dashboard/logout-flow.ts",
   "src/app/auth/telegram-link/route.ts",
   "src/app/auth/logout/route.ts",
   "src/server/telegram/flows/dashboard-flow.ts",

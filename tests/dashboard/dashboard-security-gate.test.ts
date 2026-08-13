@@ -317,7 +317,8 @@ describe("M12.11 dashboard security gate — source contracts", () => {
       assert.equal(source.includes("telegramUserId"), false, `${file} leaks telegram ids`);
     }
     const logout = readFileSync("src/app/auth/logout/route.ts", "utf8");
-    assert.match(logout, /buildDashboardSessionClearAttributes/, "logout must use the shared clear-cookie attributes");
+    assert.match(logout, /logoutCookieSet/, "logout must use the shared clear-cookie seam");
+    assert.match(logout, /status: 405/, "GET /auth/logout must be non-destructive");
     const sessionSeam = readFileSync("src/server/dashboard/session.ts", "utf8");
     assert.match(sessionSeam, /maxAge: 0/, "the clear-cookie helper must expire the session cookie");
     assert.match(sessionSeam, /sameSite: "lax"/, "clear attributes must mirror the issued Lax cookie");

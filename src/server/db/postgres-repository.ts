@@ -1,4 +1,4 @@
-import type { Fragment, PendingQuery, Sql } from "postgres";
+import type { Fragment, Sql } from "postgres";
 
 import { canTransition, StateTransitionError, type ExecutionState } from "../execution/state-machine.ts";
 import { isAgentRunTerminalOutcome, type AgentRunStatus } from "../agent/types.ts";
