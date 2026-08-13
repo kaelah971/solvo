@@ -214,16 +214,19 @@ describe("M12.11 dashboard security gate — source contracts", () => {
     }
   });
 
-  it("1-4. every page re-verifies the signed session + active membership on each request", () => {
-    // The layout is the shell; every content page performs its own gate.
+  it("1-4. every page shares ONE gate: signed session + active membership re-check per request", () => {
+    // The layout is the shell; every content page uses the single shared
+    // requireDashboardPageContext helper (no per-page auth logic allowed).
     for (const file of PAGE_FILES) {
       if (file.endsWith("layout.tsx")) continue;
       const source = readFileSync(file, "utf8");
-      assert.match(source, /resolveDashboardPageGate\(await headers\(\)\)/, `${file} misses the page gate`);
-      assert.match(source, /requireDashboardContext/, `${file} misses the membership re-check`);
-      assert.match(source, /getDbRepository\(\)/, `${file} misses the repository acquisition`);
+      assert.match(source, /requireDashboardPageContext\(await headers\(\), "/, `${file} misses the shared page gate`);
+      assert.equal(source.includes("resolveDashboardPageGate"), false, `${file} bypasses the shared gate`);
+      assert.equal(source.includes("getDbRepository("), false, `${file} acquires the repo outside the shared gate`);
+      assert.equal(source.includes("requireDashboardContext"), false, `${file} calls the session seam directly`);
+      assert.equal(source.includes("parseDashboardSessionCookie"), false, `${file} parses cookies itself`);
       const unavailable = (source.match(/return <DashboardUnavailable \/>;/g) ?? []).length;
-      assert.ok(unavailable >= 2, `${file}: expected >=2 unavailable branches, got ${unavailable}`);
+      assert.ok(unavailable >= 1, `${file}: expected >=1 unavailable branch, got ${unavailable}`);
       if (file.includes("[id]")) {
         assert.match(source, /<DashboardNotFound \/>/, `${file} misses the generic not-found panel`);
       }

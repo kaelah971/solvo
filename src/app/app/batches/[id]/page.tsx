@@ -4,9 +4,7 @@ import Link from "next/link";
 
 import { SectionLabel } from "@/components/SectionLabel";
 import { DashboardNotFound, DashboardUnavailable } from "@/components/DashboardPanels";
-import { getDbRepository } from "@/server/db/accessor";
-import { requireDashboardContext } from "@/server/dashboard/session";
-import { resolveDashboardPageGate } from "@/server/dashboard/page-gate";
+import { requireDashboardPageContext } from "@/server/dashboard/page-gate";
 import { buildBatchDetailPageModel } from "@/server/dashboard/payouts-page";
 import { auditEventLabel, formatUtc } from "@/server/dashboard/overview-page";
 
@@ -26,15 +24,11 @@ export const dynamic = "force-dynamic";
  * transaction hash. No approve, reject, or retry controls exist on this page.
  */
 export default async function BatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const gate = resolveDashboardPageGate(await headers());
-  const repo = getDbRepository();
-  if (repo === null || gate.secret === null) return <DashboardUnavailable />;
-
-  const required = await requireDashboardContext({ repo, session: gate.session, nowIso: gate.nowIso });
-  if (!required.ok) return <DashboardUnavailable />;
+  const page = await requireDashboardPageContext(await headers(), "batch-detail");
+  if (!page.ok) return <DashboardUnavailable />;
 
   const { id } = await params;
-  const model = await buildBatchDetailPageModel(repo, required.ctx, id);
+  const model = await buildBatchDetailPageModel(page.repo, page.ctx, id);
   if (!model.ok) return <DashboardNotFound />;
 
   const { detail } = model;

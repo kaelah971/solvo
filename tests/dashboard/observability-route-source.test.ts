@@ -194,9 +194,9 @@ describe("observability route source contract", () => {
     const listBranches = (source: string) => (source.match(/return <DashboardUnavailable \/>;/g) ?? []).length;
     for (const file of ["src/app/app/agent-runs/page.tsx", "src/app/app/audit/page.tsx"]) {
       const branches = listBranches(readFileSync(file, "utf8"));
-      assert.ok(branches >= 3, `${file}: expected >=3 unavailable branches, got ${branches}`);
+      assert.ok(branches >= 2, `${file}: expected >=2 unavailable branches, got ${branches}`);
     }
-    assert.ok(listBranches(detail) >= 2, "detail page must render unavailable for every denied path");
+    assert.ok(listBranches(detail) >= 1, "detail page must render unavailable for every denied path");
     const panels = readFileSync("src/components/DashboardPanels.tsx", "utf8");
     assert.equal(panels.includes("runId"), false);
     assert.equal(panels.includes("workspaceId"), false);

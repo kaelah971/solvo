@@ -3,9 +3,7 @@ import { headers } from "next/headers";
 
 import { SectionLabel } from "@/components/SectionLabel";
 import { DashboardUnavailable } from "@/components/DashboardPanels";
-import { getDbRepository } from "@/server/db/accessor";
-import { requireDashboardContext } from "@/server/dashboard/session";
-import { resolveDashboardPageGate } from "@/server/dashboard/page-gate";
+import { requireDashboardPageContext } from "@/server/dashboard/page-gate";
 import { buildRecipientsPageModel } from "@/server/dashboard/directory-page";
 import { formatUtc } from "@/server/dashboard/overview-page";
 
@@ -25,14 +23,10 @@ export const dynamic = "force-dynamic";
  * funds — the copy says so.
  */
 export default async function RecipientsPage() {
-  const gate = resolveDashboardPageGate(await headers());
-  const repo = getDbRepository();
-  if (repo === null || gate.secret === null) return <DashboardUnavailable />;
+  const page = await requireDashboardPageContext(await headers(), "recipients");
+  if (!page.ok) return <DashboardUnavailable />;
 
-  const required = await requireDashboardContext({ repo, session: gate.session, nowIso: gate.nowIso });
-  if (!required.ok) return <DashboardUnavailable />;
-
-  const model = await buildRecipientsPageModel(repo, required.ctx);
+  const model = await buildRecipientsPageModel(page.repo, page.ctx);
   if (!model.ok) return <DashboardUnavailable />;
 
   return (

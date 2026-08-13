@@ -139,7 +139,7 @@ describe("directory route source contract", () => {
     for (const file of PAGE_FILES) {
       const source = readFileSync(file, "utf8");
       const branches = (source.match(/return <DashboardUnavailable \/>;/g) ?? []).length;
-      assert.ok(branches >= 3, `${file}: expected >=3 unavailable branches, got ${branches}`);
+      assert.ok(branches >= 2, `${file}: expected >=2 unavailable branches, got ${branches}`);
     }
   });
 });

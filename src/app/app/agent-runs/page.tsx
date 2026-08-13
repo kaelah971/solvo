@@ -4,9 +4,7 @@ import Link from "next/link";
 
 import { SectionLabel } from "@/components/SectionLabel";
 import { DashboardUnavailable } from "@/components/DashboardPanels";
-import { getDbRepository } from "@/server/db/accessor";
-import { requireDashboardContext } from "@/server/dashboard/session";
-import { resolveDashboardPageGate } from "@/server/dashboard/page-gate";
+import { requireDashboardPageContext } from "@/server/dashboard/page-gate";
 import { buildAgentRunListPageModel } from "@/server/dashboard/observability-page";
 import { formatUtc } from "@/server/dashboard/overview-page";
 
@@ -26,14 +24,10 @@ export const dynamic = "force-dynamic";
  * JSON and never payment truth.
  */
 export default async function AgentRunsPage() {
-  const gate = resolveDashboardPageGate(await headers());
-  const repo = getDbRepository();
-  if (repo === null || gate.secret === null) return <DashboardUnavailable />;
+  const page = await requireDashboardPageContext(await headers(), "agent-runs");
+  if (!page.ok) return <DashboardUnavailable />;
 
-  const required = await requireDashboardContext({ repo, session: gate.session, nowIso: gate.nowIso });
-  if (!required.ok) return <DashboardUnavailable />;
-
-  const model = await buildAgentRunListPageModel(repo, required.ctx);
+  const model = await buildAgentRunListPageModel(page.repo, page.ctx);
   if (!model.ok) return <DashboardUnavailable />;
 
   return (

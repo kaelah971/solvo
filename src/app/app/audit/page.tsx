@@ -3,9 +3,7 @@ import { headers } from "next/headers";
 
 import { SectionLabel } from "@/components/SectionLabel";
 import { DashboardUnavailable } from "@/components/DashboardPanels";
-import { getDbRepository } from "@/server/db/accessor";
-import { requireDashboardContext } from "@/server/dashboard/session";
-import { resolveDashboardPageGate } from "@/server/dashboard/page-gate";
+import { requireDashboardPageContext } from "@/server/dashboard/page-gate";
 import { buildAuditPageModel } from "@/server/dashboard/observability-page";
 import { formatUtc } from "@/server/dashboard/overview-page";
 
@@ -25,14 +23,10 @@ export const dynamic = "force-dynamic";
  * and tokens never render.
  */
 export default async function AuditPage() {
-  const gate = resolveDashboardPageGate(await headers());
-  const repo = getDbRepository();
-  if (repo === null || gate.secret === null) return <DashboardUnavailable />;
+  const page = await requireDashboardPageContext(await headers(), "audit");
+  if (!page.ok) return <DashboardUnavailable />;
 
-  const required = await requireDashboardContext({ repo, session: gate.session, nowIso: gate.nowIso });
-  if (!required.ok) return <DashboardUnavailable />;
-
-  const model = await buildAuditPageModel(repo, required.ctx);
+  const model = await buildAuditPageModel(page.repo, page.ctx);
   if (!model.ok) return <DashboardUnavailable />;
 
   return (

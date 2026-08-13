@@ -167,9 +167,10 @@ function logDashboardSessionDebug(input: {
   session: DashboardSession | null;
   ctx: DashboardContext;
   allowed: boolean;
+  pageName: string;
 }): void {
   // Tag must stay on this line so source contracts only ever see it here.
-  console.log(`dashboard_session_debug ${JSON.stringify({ cookiePresent: input.session !== null, signatureValid: input.session !== null, sessionExpired: false, membershipFound: input.ctx.memberId !== null, membershipActive: input.ctx.status === "active" && input.ctx.role !== null && input.ctx.mode !== null, role: input.ctx.role, gateResult: input.allowed ? "allowed" : "unavailable" })}`);
+  console.log(`dashboard_session_debug ${JSON.stringify({ routeGroup: "app", pageName: input.pageName, cookiePresent: input.session !== null, signatureValid: input.session !== null, sessionExpired: false, membershipFound: input.ctx.memberId !== null, membershipActive: input.ctx.status === "active" && input.ctx.role !== null && input.ctx.mode !== null, role: input.ctx.role, gateResult: input.allowed ? "allowed" : "unavailable" })}`);
 }
 
 export type RequireDashboardContextResult =
@@ -180,6 +181,8 @@ export type RequireDashboardContextInput = {
   repo: SolvoRepository;
   session: DashboardSession | null;
   nowIso: string;
+  /** Page/route label for the safe session diagnostic. */
+  pageName?: string;
 };
 
 /**
@@ -191,6 +194,7 @@ export type RequireDashboardContextInput = {
 export async function requireDashboardContext(
   input: RequireDashboardContextInput,
 ): Promise<RequireDashboardContextResult> {
+  const pageName = input.pageName ?? "dashboard";
   if (input.session === null) {
     const ctx: DashboardContext = {
       workspaceId: "",
@@ -201,7 +205,7 @@ export async function requireDashboardContext(
       mode: null,
       nowIso: input.nowIso,
     };
-    logDashboardSessionDebug({ session: null, ctx, allowed: false });
+    logDashboardSessionDebug({ session: null, ctx, allowed: false, pageName });
     return { ok: false };
   }
   const ctx = await resolveDashboardContext({
@@ -211,7 +215,7 @@ export async function requireDashboardContext(
     nowIso: input.nowIso,
   });
   const allowed = canViewDashboard(ctx);
-  logDashboardSessionDebug({ session: input.session, ctx, allowed });
+  logDashboardSessionDebug({ session: input.session, ctx, allowed, pageName });
   if (!allowed) return { ok: false };
   return { ok: true, ctx };
 }
