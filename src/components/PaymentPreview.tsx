@@ -31,9 +31,9 @@ export function PaymentPreview({
   return (
     <section
       aria-label="Payment request preview"
-      className={`border-y border-line bg-white/[0.015] px-6 py-6 sm:px-8 ${className}`}
+      className={`content-panel overflow-hidden rounded-[28px] border border-border bg-surface px-5 py-5 sm:px-8 sm:py-7 ${className}`}
     >
-      <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-primary">
+      <p className="border-b border-line pb-5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-[var(--color-orange,#ff6a1a)]">
         Payment Request
       </p>
 

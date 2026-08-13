@@ -36,8 +36,8 @@ export default async function AuditPage() {
   if (!model.ok) return <DashboardUnavailable />;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
-      <header className="border-b border-line pb-6">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+      <header className="border-b border-line pb-7">
         <SectionLabel>Timeline</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           Audit
@@ -54,9 +54,9 @@ export default async function AuditPage() {
           No audit events recorded yet.
         </p>
       ) : (
-        <div className="mt-6">
+        <div className="mt-6 overflow-hidden rounded-xl border border-line bg-[#191919]">
           {model.items.map((item) => (
-            <div key={item.view.eventId} className="hairline-top py-4">
+            <div key={item.view.eventId} className="hairline-top px-5 py-4 sm:px-6">
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                 <p className="text-[13px] font-medium tracking-[0.05em] text-primary">{item.eventLabel}</p>
                 <div className="flex flex-wrap items-baseline gap-x-4">

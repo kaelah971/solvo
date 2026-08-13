@@ -40,7 +40,7 @@ const judgeRequirements = [
 export default function JudgePage() {
   return (
     <PageShell>
-      <header className="mt-14 md:mt-20">
+      <header className="page-hero mt-10 rounded-[32px] border border-border bg-surface px-6 py-10 sm:px-10 sm:py-14 md:mt-16">
         <SectionLabel>Judge demo</SectionLabel>
         <StatusLabel
           label="Self-serve public execution environment"
@@ -70,7 +70,7 @@ export default function JudgePage() {
         </StatePanel>
       </div>
 
-      <section className="mt-16 max-w-3xl">
+      <section className="content-panel mt-8 max-w-3xl rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Judge environment</SectionLabel>
         <h2 className="mt-5 max-w-xl text-xl font-medium leading-[1.2] tracking-[-0.01em] text-primary md:text-2xl">
           How self-serve judge execution works.

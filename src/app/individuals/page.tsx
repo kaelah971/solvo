@@ -83,7 +83,7 @@ const securityNotes = [
 export default function IndividualsPage() {
   return (
     <PageShell className="pt-10 md:pt-16">
-      <section>
+      <section className="page-hero rounded-[32px] border border-border bg-surface px-6 py-12 sm:px-10 sm:py-16">
         <SectionLabel>Personal workspace</SectionLabel>
         <h1 className="mt-5 max-w-2xl font-display text-3xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-4xl">
           Payments for individuals
@@ -94,7 +94,7 @@ export default function IndividualsPage() {
         </p>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Direct payments</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           An explicit address, validated and shown.
@@ -103,7 +103,7 @@ export default function IndividualsPage() {
           A direct payment names the destination up front. Solvo checks it,
           shows it, simulates it and then executes it.
         </p>
-        <div className="mt-8 max-w-3xl">
+        <div className="mt-8 max-w-3xl overflow-hidden rounded-[20px] border border-line px-5">
           {directSteps.map((step) => (
             <PolicyRow key={step.index} index={step.index} title={step.title}>
               {step.body}
@@ -112,7 +112,7 @@ export default function IndividualsPage() {
         </div>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Claim links</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           The recipient supplies the destination.
@@ -122,7 +122,7 @@ export default function IndividualsPage() {
           wallet address. The sender still approves the final destination
           before money moves.
         </p>
-        <div className="mt-8 max-w-3xl">
+        <div className="mt-8 max-w-3xl overflow-hidden rounded-[20px] border border-line px-5">
           {claimSteps.map((step) => (
             <PolicyRow key={step.index} index={step.index} title={step.title}>
               {step.body}
@@ -131,7 +131,7 @@ export default function IndividualsPage() {
         </div>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Before approval</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           The preview is the checkpoint.
@@ -145,7 +145,7 @@ export default function IndividualsPage() {
         </div>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Security notes</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           Identity is never guessed.
@@ -172,7 +172,7 @@ export default function IndividualsPage() {
         </ul>
       </section>
 
-      <section className="mt-24 border-t border-line py-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-12 sm:px-10">
         <h2 className="max-w-lg font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           Request it in chat.
           <br />

@@ -4,11 +4,12 @@ type EmptyStateProps = {
   className?: string;
 };
 
-/** Truthful empty state. No icons, no decorations — just a clear statement. */
+/** Truthful empty state with restrained product framing. */
 export function EmptyState({ label, description, className = "" }: EmptyStateProps) {
   return (
-    <div className={`border-y border-line bg-white/[0.015] px-6 py-10 text-center ${className}`}>
-      <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">
+    <div className={`content-panel rounded-[24px] border border-border bg-surface px-6 py-10 text-center ${className}`}>
+      <span aria-hidden="true" className="mx-auto mb-5 block h-px w-10 bg-[var(--color-orange,#ff6a1a)]" />
+      <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-primary">
         {label}
       </p>
       {description && (

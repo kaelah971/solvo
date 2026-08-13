@@ -42,13 +42,13 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
   const decision = detail.decision !== null ? `${detail.decision.role} ${detail.decision.maskedId}` : null;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-muted">
         <Link href="/app/payouts" className="transition-colors hover:text-primary">
           Payouts
         </Link>
       </p>
-      <header className="mt-3 border-b border-line pb-6">
+      <header className="mt-3 border-b border-line pb-7">
         <SectionLabel>Payout request</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           {payoutListSourceLabel(detail.sourceType)}
@@ -56,7 +56,7 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
         <p className="mt-3 font-data text-[12px] tracking-[0.05em] text-muted">{detail.payoutId}</p>
       </header>
 
-      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         <DetailCell label="Status" value={detail.stateLabel} />
         <DetailCell label="Requester" value={requester} />
         <DetailCell label="Decision" value={decision ?? "No decision yet"} />
@@ -69,11 +69,11 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
 
       <section className="mt-12">
         <SectionLabel>Items</SectionLabel>
-        <div className="hairline-top mt-4">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-line bg-[#191919] px-5">
           {detail.items.length === 0 ? (
             <p className="py-5 text-[12px] leading-[1.5] tracking-[0.06em] text-secondary">No items recorded.</p>
           ) : (
-            <table className="w-full text-left">
+            <table className="w-full min-w-[720px] text-left">
               <thead>
                 <tr className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">
                   <th className="py-3 pr-4 font-semibold">Recipient</th>
@@ -122,7 +122,7 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
 
       <section className="mt-12">
         <SectionLabel>Audit trail</SectionLabel>
-        <div className="hairline-top mt-4">
+        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919] px-5">
           {detail.auditTimeline.length === 0 ? (
             <p className="py-5 text-[12px] leading-[1.5] tracking-[0.06em] text-secondary">No audit events recorded.</p>
           ) : (
@@ -157,9 +157,9 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
 
 function DetailCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-void px-5 py-5">
+    <div className="min-w-0 bg-[#191919] px-5 py-5">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">{label}</p>
-      <p className="mt-2 font-data text-[12px] leading-[1.5] tracking-[0.04em] text-primary">{value}</p>
+      <p className="mt-2 break-words font-data text-[12px] leading-[1.5] tracking-[0.04em] text-primary">{value}</p>
     </div>
   );
 }

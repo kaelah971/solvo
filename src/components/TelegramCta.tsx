@@ -4,7 +4,7 @@ import { telegram, telegramConfigured } from "@/lib/config";
 type TelegramCtaProps = {
   label?: string;
   className?: string;
-  variant?: "outline" | "text";
+  variant?: "outline" | "text" | "light" | "dark";
   showConfigurationNote?: boolean;
 };
 
@@ -23,6 +23,7 @@ export function TelegramCta({
     variant === "text"
       ? "nav-interaction !border-transparent !px-0 !text-muted"
       : "";
+  const ctaVariant = variant === "text" ? "outline" : variant;
 
   if (telegramConfigured) {
     return (
@@ -30,6 +31,7 @@ export function TelegramCta({
         href={telegram.botUrl}
         target="_blank"
         rel="noopener noreferrer"
+        variant={ctaVariant}
         className={`${variantClassName} ${className}`}
       >
         {label}
@@ -42,6 +44,7 @@ export function TelegramCta({
       <Cta
         disabled
         title="Telegram bot URL is not configured"
+        variant={ctaVariant}
         className={`${variantClassName} ${className}`}
       >
         {label}
@@ -54,6 +57,7 @@ export function TelegramCta({
       <Cta
         disabled
         title="Telegram bot URL is not configured"
+        variant={ctaVariant}
         className={variantClassName}
       >
         {label}

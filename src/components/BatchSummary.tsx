@@ -40,9 +40,9 @@ export function BatchSummary({
   return (
     <section
       aria-label="Payout batch summary"
-      className={`border-y border-line bg-white/[0.015] px-6 py-6 sm:px-8 ${className}`}
+      className={`content-panel overflow-hidden rounded-[28px] border border-border bg-surface px-5 py-5 sm:px-8 sm:py-7 ${className}`}
     >
-      <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-primary">
+      <p className="border-b border-line pb-5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-[var(--color-orange,#ff6a1a)]">
         {title}
       </p>
 
@@ -54,7 +54,7 @@ export function BatchSummary({
         <ProofRow label="Approval" value={approval ?? "—"} />
       </dl>
 
-      <div className="mt-2 flex items-baseline justify-between border-t border-line pt-3">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
         <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">
           Status
         </p>

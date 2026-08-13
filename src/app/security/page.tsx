@@ -21,7 +21,7 @@ const sectionBody =
 export default function SecurityPage() {
   return (
     <PageShell>
-      <header className="mt-14 md:mt-20">
+      <header className="page-hero mt-10 rounded-[32px] border border-border bg-surface px-6 py-12 sm:px-10 sm:py-16 md:mt-16">
         <SectionLabel>Security</SectionLabel>
         <h1 className="mt-4 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           The trust model.
@@ -32,7 +32,7 @@ export default function SecurityPage() {
         </p>
       </header>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Before anything moves</SectionLabel>
         <h2 className={sectionHeading}>Checks run before value can move.</h2>
         <p className={sectionBody}>
@@ -59,7 +59,7 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Authorization</SectionLabel>
         <h2 className={sectionHeading}>
           Authority is deterministic, not conversational.
@@ -89,7 +89,7 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Execution</SectionLabel>
         <h2 className={sectionHeading}>
           Simulation before broadcast. Proof after.
@@ -130,7 +130,7 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Proof</SectionLabel>
         <h2 className={sectionHeading}>
           No payment is complete until it is proved.
@@ -150,7 +150,7 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Judge environment</SectionLabel>
         <h2 className={sectionHeading}>
           A separate, strictly capped environment.
@@ -171,7 +171,7 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Credentials</SectionLabel>
         <h2 className={sectionHeading}>Secrets never leave the server.</h2>
         <p className={sectionBody}>
@@ -189,7 +189,7 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Truthful states</SectionLabel>
         <h2 className={sectionHeading}>The interface never overclaims.</h2>
         <p className={sectionBody}>

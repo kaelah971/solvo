@@ -5,14 +5,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { TelegramCta } from "@/components/TelegramCta";
+import { Wordmark } from "@/components/Wordmark";
 
 const primaryLinks = [
-  { label: "Product", href: "/community" },
-  { label: "How it works", href: "/how-it-works" },
+  { label: "Product", href: "/#product" },
+  { label: "How it works", href: "/#how-it-works" },
 ] as const;
 
 const menuLinks = [
-  { label: "How it works", href: "/how-it-works" },
+  { label: "Product", href: "/#product" },
+  { label: "How it works", href: "/#how-it-works" },
   { label: "Community", href: "/community" },
   { label: "Individuals", href: "/individuals" },
   { label: "Security", href: "/security" },
@@ -22,7 +24,7 @@ const menuLinks = [
 
 const linkClass = (active: boolean) =>
   `nav-interaction inline-flex min-h-11 items-center text-[11px] font-medium uppercase leading-[1.2] tracking-[0.2em] ${
-    active ? "text-primary" : "text-muted"
+    active ? "text-primary" : "text-secondary"
   }`;
 
 export function SiteNav() {
@@ -47,17 +49,17 @@ export function SiteNav() {
   return (
     <nav
       aria-label="Primary"
-      className="relative flex items-center justify-between py-5"
+      className="site-nav relative grid min-h-[76px] grid-cols-[1fr_auto] items-center py-4 md:grid-cols-[1fr_auto_1fr]"
     >
       <Link
         href="/"
         aria-label="Solvo home"
-        className="inline-flex min-h-11 min-w-11 items-center text-[16px] font-semibold uppercase tracking-[0.28em] text-primary"
+        className="inline-flex min-h-11 items-center justify-self-start"
       >
-        S
+        <Wordmark />
       </Link>
 
-      <div className="hidden items-center gap-8 md:flex">
+      <div className="nav-capsule hidden items-center gap-1 justify-self-center md:flex">
         {primaryLinks.map((link) => (
           <Link
             key={link.href}
@@ -71,8 +73,11 @@ export function SiteNav() {
           label="Telegram"
           variant="text"
           showConfigurationNote={false}
-          className="ml-2"
         />
+      </div>
+
+      <div className="hidden justify-self-end md:block">
+        <TelegramCta label="Open Solvo" variant="light" showConfigurationNote={false} className="nav-open-solvo" />
       </div>
 
       <button
@@ -92,7 +97,7 @@ export function SiteNav() {
       {open && (
         <div
           id="site-menu"
-          className="absolute inset-x-0 top-[72px] z-40 bg-void px-6 pb-8 md:hidden"
+          className="mobile-site-menu absolute inset-x-0 top-[72px] z-40 px-6 pb-8 md:hidden"
         >
           <ul className="hairline-bottom flex flex-col divide-y divide-line border-line">
             {menuLinks.map((link) => (

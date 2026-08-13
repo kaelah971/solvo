@@ -36,8 +36,8 @@ export default async function BatchesPage() {
   if (!model.ok) return <DashboardUnavailable />;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
-      <header className="border-b border-line pb-6">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+      <header className="border-b border-line pb-7">
         <SectionLabel>Requests</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           Batches
@@ -51,9 +51,9 @@ export default async function BatchesPage() {
       {model.empty ? (
         <p className="py-10 text-[13px] leading-[1.6] tracking-[0.05em] text-secondary">No batch payouts yet.</p>
       ) : (
-        <ul className="mt-6">
+        <ul className="mt-6 overflow-hidden rounded-xl border border-line bg-[#191919]">
           {model.items.map((item) => (
-            <li key={item.view.payoutId} className="hairline-top py-4">
+            <li key={item.view.payoutId} className="hairline-top px-5 py-4 transition-colors hover:bg-white/[0.025] sm:px-6">
               <Link
                 href={`/app/batches/${item.view.payoutId}`}
                 className="block transition-colors hover:opacity-80"

@@ -82,7 +82,7 @@ const stateLanguage = [
 export default function HowItWorksPage() {
   return (
     <PageShell className="pt-10 md:pt-16">
-      <section>
+      <section className="page-hero rounded-[32px] border border-border bg-surface px-6 py-12 sm:px-10 sm:py-16">
         <SectionLabel>The execution agent</SectionLabel>
         <h1 className="mt-5 max-w-2xl font-display text-3xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-4xl">
           How the execution agent works
@@ -94,7 +94,7 @@ export default function HowItWorksPage() {
         </p>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>The agent loop</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           One continuous sequence from instruction to proof.
@@ -103,7 +103,7 @@ export default function HowItWorksPage() {
           Every payment request passes through the same eight stages. The
           sequence does not skip validation, approval or simulation.
         </p>
-        <div className="mt-8 max-w-3xl">
+        <div className="mt-8 max-w-3xl overflow-hidden rounded-[20px] border border-line px-5">
           {loopSteps.map((step) => (
             <PolicyRow key={step.index} index={step.index} title={step.title}>
               {step.body}
@@ -112,7 +112,7 @@ export default function HowItWorksPage() {
         </div>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Where agency lives</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           Agentic moments sit inside deterministic guardrails.
@@ -123,7 +123,7 @@ export default function HowItWorksPage() {
           language.
         </p>
         <div className="mt-8 grid grid-cols-1 gap-10 md:grid-cols-2">
-          <div>
+          <div className="rounded-[20px] border border-line bg-black/10 p-6">
             <h3 className="text-[12px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-primary">
               Agentic moments
             </h3>
@@ -152,7 +152,7 @@ export default function HowItWorksPage() {
               ))}
             </ul>
           </div>
-          <div>
+          <div className="rounded-[20px] border border-line bg-black/10 p-6">
             <h3 className="text-[12px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-primary">
               Deterministic guardrails
             </h3>
@@ -188,7 +188,7 @@ export default function HowItWorksPage() {
         </p>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>State language</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           Fixed phrases. No ambiguity.
@@ -219,7 +219,7 @@ export default function HowItWorksPage() {
         </ul>
       </section>
 
-      <section className="mt-24 border-t border-line pt-10">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>The Execution Line</SectionLabel>
         <h2 className="mt-5 max-w-xl font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           One line, five real states.

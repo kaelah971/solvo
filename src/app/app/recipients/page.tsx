@@ -36,8 +36,8 @@ export default async function RecipientsPage() {
   if (!model.ok) return <DashboardUnavailable />;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
-      <header className="border-b border-line pb-6">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+      <header className="border-b border-line pb-7">
         <SectionLabel>Directory</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           Recipients
@@ -51,12 +51,12 @@ export default async function RecipientsPage() {
       {model.empty ? (
         <p className="py-10 text-[13px] leading-[1.6] tracking-[0.05em] text-secondary">No recipients saved yet.</p>
       ) : (
-        <ul className="mt-6">
+        <ul className="mt-6 overflow-hidden rounded-xl border border-line bg-[#191919]">
           {model.items.map((item) => (
-            <li key={item.recipientId} className="hairline-top py-4">
+            <li key={item.recipientId} className="hairline-top px-5 py-4 sm:px-6">
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                 <p className="text-[13px] font-medium tracking-[0.05em] text-primary">{item.alias}</p>
-                <p className="font-data text-[12px] tracking-[0.04em] text-secondary">{item.wallet}</p>
+                <p className="max-w-full break-all font-data text-[12px] tracking-[0.04em] text-secondary">{item.wallet}</p>
               </div>
               <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
                 <p className="text-[11px] tracking-[0.06em] text-muted">

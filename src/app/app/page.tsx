@@ -50,8 +50,8 @@ export default async function OverviewPage() {
 function OverviewDashboard({ model }: { model: Extract<OverviewPageModel, { ok: true }> }) {
   const { overview } = model;
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3 border-b border-line pb-6">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-line pb-7">
         <div>
           <SectionLabel>Workspace</SectionLabel>
           <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
@@ -64,7 +64,7 @@ function OverviewDashboard({ model }: { model: Extract<OverviewPageModel, { ok: 
         </div>
       </header>
 
-      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Pending approvals"
           value={String(overview.pendingApprovals)}
@@ -105,7 +105,7 @@ function OverviewDashboard({ model }: { model: Extract<OverviewPageModel, { ok: 
         </p>
       )}
 
-      <section className="mt-14 grid grid-cols-1 gap-10 lg:grid-cols-2">
+      <section className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <RecentActivity
           title="Recent audit events"
           body={
@@ -156,7 +156,7 @@ function OverviewDashboard({ model }: { model: Extract<OverviewPageModel, { ok: 
 
 function Badge({ label }: { label: string }) {
   return (
-    <span className="border border-border px-3 py-1.5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-secondary">
+    <span className="rounded-full border border-border bg-white/[0.025] px-3 py-1.5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.16em] text-secondary">
       {label}
     </span>
   );
@@ -164,7 +164,7 @@ function Badge({ label }: { label: string }) {
 
 function StatCard({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <div className="bg-void px-5 py-6">
+    <div className="bg-[#191919] px-5 py-6 sm:px-6">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">{label}</p>
       <p className="mt-3 font-data text-[22px] leading-[1.2] tracking-[0.03em] text-primary">{value}</p>
       <p className="mt-3 text-[11px] leading-[1.5] tracking-[0.06em] text-muted">{note}</p>
@@ -184,7 +184,7 @@ function RecentActivity({
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className="rounded-2xl border border-line bg-[#191919] p-5 sm:p-6">
       <SectionLabel>{title}</SectionLabel>
       {note && <p className="mt-2 text-[11px] leading-[1.5] tracking-[0.08em] text-muted">{note}</p>}
       <div className="hairline-top mt-5">

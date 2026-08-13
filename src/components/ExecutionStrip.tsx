@@ -25,12 +25,12 @@ const stripItems = [
  */
 export function ExecutionStrip() {
   return (
-    <div className="hairline-top hairline-bottom grid grid-cols-1 sm:grid-cols-3">
+    <div className="execution-strip hairline-top hairline-bottom grid grid-cols-1 sm:grid-cols-3">
       {stripItems.map((item) => (
         <a
           key={item.index}
           href={item.href}
-          className="execution-strip-link relative block px-5 py-6 sm:px-7 [@media(max-height:500px)_and_(min-width:640px)]:!px-4 [@media(max-height:500px)_and_(min-width:640px)]:!py-2 [&+&]:border-t [&+&]:border-line sm:[&+&]:border-l sm:[&+&]:border-t-0"
+          className="execution-strip-link relative block px-5 py-6 sm:px-7 [&+&]:border-t [&+&]:border-line sm:[&+&]:border-l sm:[&+&]:border-t-0"
         >
           <p className="execution-strip-number font-data text-[11px] tracking-[0.08em] text-faint [@media(max-height:500px)_and_(min-width:640px)]:!text-[9px] [@media(max-height:500px)_and_(min-width:640px)]:!leading-none">
             {item.index}.

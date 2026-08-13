@@ -13,7 +13,7 @@ const footerLinks = [
 
 export function Footer() {
   return (
-    <footer className="hairline-top mt-16 py-8">
+    <footer className="site-footer hairline-top mt-16 py-8">
       <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
         <div className="flex flex-col gap-3">
           <Wordmark />
@@ -36,7 +36,7 @@ export function Footer() {
       </div>
       <div className="hairline-top mt-8 flex flex-col gap-2 pt-6 text-[11px] leading-[1.4] tracking-[0.15em] text-muted md:flex-row md:justify-between">
         <p>Solvo — Conversational Treasury Execution</p>
-        <p>KeeperHub Hackathon · The Last Mile</p>
+        <p><span className="footer-signal" aria-hidden="true" /> KeeperHub-backed execution</p>
       </div>
     </footer>
   );

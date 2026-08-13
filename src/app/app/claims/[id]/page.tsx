@@ -43,13 +43,13 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
   const requester = detail.requesterLabel ?? "Unknown requester";
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-muted">
         <Link href="/app/claims" className="transition-colors hover:text-primary">
           Claim links
         </Link>
       </p>
-      <header className="mt-3 border-b border-line pb-6">
+      <header className="mt-3 border-b border-line pb-7">
         <SectionLabel>Claim link</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           {model.statusLabel}
@@ -57,7 +57,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
         <p className="mt-3 font-data text-[12px] tracking-[0.05em] text-muted">{detail.claimId}</p>
       </header>
 
-      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         <DetailCell label="Status" value={model.proofLabel} />
         <DetailCell label="Amount" value={`${detail.amountUsdc} ${detail.currency}`} />
         <DetailCell label="Network" value={detail.network} />
@@ -75,7 +75,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
         />
       </section>
 
-      <section className="mt-10 max-w-2xl">
+      <section className="mt-10 max-w-2xl rounded-xl border border-line bg-[#191919] p-5">
         <SectionLabel>What this status means</SectionLabel>
         <p className="mt-3 text-[12px] leading-[1.6] tracking-[0.05em] text-secondary">{statusView.safetyNote}</p>
         {statusView.claimedAt !== null && (
@@ -87,7 +87,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
 
       <section className="mt-10">
         <SectionLabel>Proof</SectionLabel>
-        <div className="hairline-top mt-4">
+        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919] px-5">
           {statusView.txHash !== null && statusView.txExplorerUrl !== null ? (
             <p className="py-4 text-[12px] leading-[1.5] tracking-[0.05em] text-secondary">
               Completed through the execution pipeline.{" "}
@@ -110,7 +110,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
 
       <section className="mt-10">
         <SectionLabel>Reissue</SectionLabel>
-        <div className="hairline-top mt-4">
+        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919] px-5">
           {model.reissue.eligible ? (
             <>
               <p className="py-4 text-[12px] leading-[1.5] tracking-[0.05em] text-secondary">
@@ -132,7 +132,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
 
       <section className="mt-12">
         <SectionLabel>Audit trail</SectionLabel>
-        <div className="hairline-top mt-4">
+        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919] px-5">
           {detail.auditTimeline.length === 0 ? (
             <p className="py-5 text-[12px] leading-[1.5] tracking-[0.06em] text-secondary">No audit events recorded.</p>
           ) : (
@@ -168,9 +168,9 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
 
 function DetailCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-void px-5 py-5">
+    <div className="min-w-0 bg-[#191919] px-5 py-5">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">{label}</p>
-      <p className="mt-2 font-data text-[12px] leading-[1.5] tracking-[0.04em] text-primary">{value}</p>
+      <p className="mt-2 break-words font-data text-[12px] leading-[1.5] tracking-[0.04em] text-primary">{value}</p>
     </div>
   );
 }

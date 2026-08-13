@@ -22,13 +22,13 @@ export function StatePanel({
 }: StatePanelProps) {
   return (
     <section
-      className={`border-y border-line bg-white/[0.015] px-6 py-10 sm:px-10 sm:py-12 ${className}`}
+      className={`content-panel overflow-hidden rounded-[28px] border border-border bg-surface px-6 py-8 sm:px-10 sm:py-11 ${className}`}
     >
       <StatusLabel label={badge} tone={tone} />
-      <h1 className="mt-4 text-balance text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary sm:text-3xl">
+      <h1 className="mt-5 max-w-2xl text-balance font-display text-2xl font-medium leading-[1.08] tracking-[-0.02em] text-primary sm:text-4xl">
         {headline}
       </h1>
-      <p className="mt-4 max-w-xl text-pretty text-[13px] leading-[1.6] tracking-[0.05em] text-secondary">
+      <p className="mt-4 max-w-xl text-pretty text-[13px] leading-[1.65] tracking-[0.03em] text-secondary">
         {body}
       </p>
       {children && <div className="mt-8">{children}</div>}

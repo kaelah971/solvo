@@ -1,459 +1,117 @@
 ---
 version: alpha
 name: Solvo
-description: "The Execution Receipt — a dark, quiet interface that makes every onchain payment state visible and provable."
+description: "A black and orange execution interface for truthful, KeeperHub-backed payment coordination."
 colors:
-  primary: "#EDEDED"
-  background: "#141414"
-  vignetteEdge: "#0A0A0A"
-  surface: "#232323"
-  surfaceTop: "rgba(255,255,255,0.03)"
-  textPrimary: "#EDEDED"
-  textSecondary: "#B8B8B8"
-  textMuted: "#8C8C8C"
-  textFaint: "#6E6E6E"
-  textGhost: "rgba(237,237,237,0.05)"
-  line: "rgba(255,255,255,0.08)"
-  border: "rgba(255,255,255,0.06)"
-  lampGlow: "#FFFFFF"
-  lampShade: "#1A1A1A"
-  lampCable: "#2E2E2E"
-  stateSuccess: "#C8C8C8"
-  stateWarning: "#999999"
-  stateError: "#D6D6D6"
+  void: "#070707"
+  vignette: "#030303"
+  surface: "#11100f"
+  primary: "#f5f3f0"
+  secondary: "#aaa6a1"
+  muted: "#77736f"
+  faint: "#615e5a"
+  line: "rgba(255, 255, 255, 0.085)"
+  border: "rgba(255, 255, 255, 0.1)"
+  solvo-orange: "#ff7417"
+  solvo-orange-soft: "#ffb166"
+  state-complete: "#c8c8c8"
+  state-pending: "#999999"
+  state-error: "#d6d6d6"
 typography:
+  sans:
+    fontFamily: "Helvetica Neue, Arial, Helvetica, sans-serif"
   display:
-    fontFamily: "Neue Montreal, General Sans, Arial, sans-serif"
-    fontSize: "7rem"
-    fontWeight: 500
-    lineHeight: 0.95
-    letterSpacing: "-0.04em"
-  wordmark:
-    fontFamily: "Neue Montreal, General Sans, Arial, sans-serif"
-    fontSize: "11px"
-    fontWeight: 500
-    lineHeight: 1
-    letterSpacing: "0.35em"
-  nav:
-    fontFamily: "General Sans, Neue Montreal, Arial, sans-serif"
-    fontSize: "11px"
-    fontWeight: 500
-    lineHeight: 1.2
-    letterSpacing: "0.2em"
-  body:
-    fontFamily: "General Sans, Neue Montreal, Arial, sans-serif"
-    fontSize: "13px"
-    fontWeight: 400
-    lineHeight: 1.5
-    letterSpacing: "0.05em"
-  label:
-    fontFamily: "General Sans, Neue Montreal, Arial, sans-serif"
-    fontSize: "11px"
-    fontWeight: 600
-    lineHeight: 1.2
-    letterSpacing: "0.15em"
+    fontFamily: "Helvetica Neue, Arial, Helvetica, sans-serif"
   data:
-    fontFamily: "General Sans, Neue Montreal, Arial, sans-serif"
-    fontSize: "12px"
-    fontWeight: 500
-    lineHeight: 1.35
-    letterSpacing: "0.08em"
-rounded:
-  none: 0px
-  hairline: 1px
-  button: 2px
-  card: 4px
-  maximum: 6px
-spacing:
-  base: 4px
-  xs: 8px
-  sm: 16px
-  md: 24px
-  lg: 32px
-  xl: 48px
-  page: 64px
-components:
-  wordmark:
-    textColor: "{colors.textPrimary}"
-    typography: "{typography.wordmark}"
-  nav-link:
-    textColor: "{colors.textMuted}"
-    typography: "{typography.nav}"
-    rounded: "{rounded.none}"
-    padding: "8px 0"
-  outline-action:
-    backgroundColor: "transparent"
-    textColor: "{colors.textPrimary}"
-    typography: "{typography.nav}"
-    rounded: "{rounded.button}"
-    padding: "10px 24px"
-  dark-card:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.textPrimary}"
-    rounded: "{rounded.card}"
-    padding: "28px"
-  receipt-panel:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.textPrimary}"
-    rounded: "{rounded.card}"
-    padding: "24px"
-  status-label:
-    textColor: "{colors.textSecondary}"
-    typography: "{typography.label}"
-    rounded: "{rounded.none}"
-    padding: "0"
+    fontFamily: "ui-monospace, SF Mono, Cascadia Mono, Menlo, Consolas, monospace"
 ---
 
 ## Overview
 
-**Solvo** is a Telegram-native conversational treasury execution product powered by KeeperHub. It turns a payment instruction into a validated, approved, simulated, executed and auditable USDC transaction.
-
-The visual system preserves the supplied dark, single-light-source substrate:
-
-- Void Black page field;
-- charcoal floating card;
-- oversized ghosted wordmark;
-- one pendant lamp;
-- sparse centered composition;
-- sharp geometry;
-- wide typographic tracking;
-- almost no decorative interface chrome.
-
-The meaning changes from an abstract lamp identity to **The Execution Receipt**. The lamp is the visible sign that value has reached a confirmed state. The interface stays quiet because financial state should be easy to inspect, not buried under visual noise.
-
-### Brand territory
-
-**The Execution Receipt**
-
-> Solvo takes a request made in conversation and leaves behind proof that the payment happened.
-
-### Core execution line
-
-```text
-REQUEST → CHECK → APPROVE → EXECUTE → PROVE
-```
-
-This line is not a decorative progress bar. Every stage corresponds to a real product state and must be backed by persisted execution data.
-
-### Product rule
-
-> Solvo should feel like a calm treasury operator showing its working—not a chatbot casually moving money.
+Solvo coordinates USDC payments from Telegram and exposes the checks, approval, execution, and proof produced through KeeperHub. Its current visual system is black, warm white, and signal orange: a reference-inspired marketing composition paired with restrained operational surfaces. The interface must look technical without implying that decorative activity is financial progress.
 
 ## Colors
 
-This is an intentionally monochrome system. There is no brand accent colour. Meaning comes from contrast, hierarchy, state labels and the single light source.
+Black is the dominant field. `void` governs the site substrate, while `surface` separates panels and operator work areas. White and gray establish the reading hierarchy.
 
-- **Void Black `#141414`** — primary page field and brand ground.
-- **Vignette Edge `#0A0A0A`** — edge falloff around the central composition.
-- **Charcoal `#232323`** — floating surface for the main product panel and cards.
-- **Off-white `#EDEDED`** — primary text, confirmed information and the visible wordmark.
-- **Secondary Grey `#B8B8B8`** — important supporting text and transaction values.
-- **Muted Grey `#8C8C8C`** — navigation, labels and explanatory copy.
-- **Faint Grey `#6E6E6E`** — low-priority numbering and secondary metadata.
-- **Ghosted Wordmark `rgba(237,237,237,0.05)`** — oversized background texture only.
-- **Divider `rgba(255,255,255,0.08)`** — hairlines and timeline separation.
-- **Border `rgba(255,255,255,0.06)`** — restrained card edge.
-- **Lamp Glow `#FFFFFF`** — the brightest point in the system.
-- **Lamp Shade `#1A1A1A`** — dark illustrated fixture.
-- **Lamp Cable `#2E2E2E`** — execution path and structural line art.
+Orange is the sole brand signal. Use it for the Solvo point, execution badge, artwork energy, active navigation markers, focus emphasis, and thin structural accents. It may identify attention or active position, but must not carry a financial state by itself. Every pending, failed, approved, simulated, or completed state requires text.
 
-### Status colour policy
-
-Solvo does not use saturated green, red, yellow or blue status colours in the core identity. Payment state is communicated through plain-language labels, position in the Execution Line, contrast and proof detail.
-
-Use these grayscale state values only when a product surface requires additional differentiation:
-
-- `#C8C8C8` — completed or verified;
-- `#999999` — pending, review or simulation;
-- `#D6D6D6` — failed, blocked or requires attention.
-
-Never rely on colour alone. Every status must include a written label.
+Public panels combine restrained borders with a warm orange radial trace. Keep proof values and body copy neutral so the accent does not compete with amounts, recipients, hashes, or warnings.
 
 ## Typography
 
-### Neue Montreal / General Sans
+Use the shared sans family for navigation, prose, and display copy. Homepage display roles use tight tracking, high weight for the primary title, and a lighter large descriptor. Public-page headings are smaller and optimized for reading rather than spectacle.
 
-The reference’s typography remains intact. Use **Neue Montreal** for display moments and the visible Solvo wordmark. Use **General Sans** for navigation, body copy, labels and transaction metadata.
+Use the data family for addresses, transaction hashes, execution identifiers, amounts where alignment matters, and compact execution labels. Long identifiers must remain selectable and wrap safely.
 
-If Neue Montreal is unavailable, use General Sans as the fallback. If both are unavailable, use a geometric sans with comparable proportions and wide tracking. Do not introduce a decorative serif or a futuristic display face.
-
-### Type roles
-
-- **Display:** large, quiet, tightly set uppercase or sentence-case headline. Use for the hero promise and major transaction state.
-- **Wordmark:** small, centered, uppercase, `+0.35em` tracking.
-- **Navigation:** 11px uppercase, `+0.2em` tracking.
-- **Body:** 13px, `+0.05em` tracking, short paragraphs only.
-- **Labels:** 11px uppercase, `+0.15em` tracking.
-- **Data:** General Sans with tabular numerals where available; use for amounts, addresses, execution IDs, timestamps and state names.
-
-### Voice in type
-
-Type should feel held, deliberate and legible. Wide tracking creates poise; it must not reduce comprehension. Transaction amounts, destination addresses and failure reasons take priority over aesthetic tracking.
+Uppercase tracked labels are for short section names and states only. Do not apply display tracking to financial values, error explanations, or paragraphs.
 
 ## Layout
 
-### Page frame
+The homepage is a large rounded landing panel inside the shared substrate. Navigation belongs inside the panel. The centered hero stacks the KeeperHub badge, exact approved title and descriptor, two actions, and an abstract execution core over a subtle line grid. The six labels around the artwork describe requested, validated, approved, KeeperHub, executed, and proved states; they are explanatory labels, not a live progress indicator.
 
-- One centered primary card, maximum width approximately `1100px`.
-- Outer page padding: `60px–80px` on desktop.
-- Mobile page padding: `24px`.
-- The card never touches the viewport edge on desktop.
-- The page uses a large radial vignette centred on the card and slightly above it toward the lamp.
-- The main composition is vertically centred with equal breathing room above and below.
+The homepage follows the reference through composition—dark framed panel, capsule navigation, centered oversized copy, sparse actions, and a luminous central object—without copying obsolete pendant-lamp or typing-wordmark motifs. Below the hero, sections return to quieter hairline-separated content.
 
-### Navigation
+Public routes use `PageShell`, the shared site width, primary navigation, and footer. Page heroes and content panels use the same dark rounded family, subtle orange trace, and generous internal spacing. Community, individual, process, security, judge, sandbox, claim, and receipt surfaces must preserve this hierarchy while adapting content density.
 
-- Single-letter Solvo mark or compact gate symbol at top-left.
-- Text navigation at top-right: `PRODUCT`, `HOW IT WORKS`, `TELEGRAM`.
-- No visible navigation bar background.
-- Navigation sits directly on the charcoal surface.
-- Use text links before boxed controls.
-
-### Hero
-
-The hero is a centred column:
-
-1. Pendant lamp overlapping the top card edge;
-2. oversized ghosted `SOLVO` wordmark behind the lamp;
-3. small visible `SOLVO` wordmark;
-4. primary promise;
-5. short descriptor;
-6. restrained request-to-proof navigation or anchor links.
-
-Recommended hero copy:
-
-```text
-FROM INSTRUCTION
-TO EXECUTION.
-```
-
-Supporting line:
-
-```text
-Telegram payment coordination with KeeperHub-backed proof.
-```
-
-### Execution strip
-
-The lower feature strip is a single continuous row divided by hairlines:
-
-```text
-01. CHECK     Validate addresses, amounts and limits.
-02. EXECUTE   Simulate and submit through KeeperHub.
-03. PROVE     Return the hash and audit record.
-```
-
-It is not three separate cards. It is one sequence.
+The dashboard is an operator workspace, not another landing page. On desktop it uses a fixed-width sidebar beside one contained work surface. On mobile the shell stacks and section navigation becomes a disclosure menu. Content must remain usable without horizontal page scrolling.
 
 ## Elevation & Depth
 
-Depth is quiet and atmospheric rather than component-heavy.
+Depth comes from near-black planes, restrained borders, inset highlights, and broad low-opacity shadows. The homepage may use orange radial illumination behind its abstract execution artwork. Public and dashboard panels use quieter traces.
 
-- Page vignette: radial gradient from approximately `#1A1A1A` at the centre to `#080808` at the edges.
-- Main card: subtle charcoal plane above the vignette.
-- Card shadow: `0 40px 100px rgba(0,0,0,0.5)`.
-- Surface top highlight: `1px inset 0 1px rgba(255,255,255,0.03)`.
-- No floating glow except the lamp glow.
-- No glassmorphism.
-- No luminous borders.
-- No gradient inside buttons, receipts or status panels.
-
-The lamp glow is the single brightest point on the page. The completed state can be high-contrast in text, but must not visually outshine the lamp.
+Do not restore the lamp as the brightest source, use glass effects as decoration, or make proof cards glow. Financial hierarchy must come from structure and typography.
 
 ## Shapes
 
-- Outer card radius: `4px`.
-- Button radius: `2px`.
-- Receipt panel radius: `4px`.
-- Dividers: hairlines, never rounded boxes.
-- Never exceed `6px` radius.
-- No pills.
-- No soft consumer-app cards.
-- No excessive rounded-square icon grids.
+The approved system uses rounded framed surfaces: the landing panel is broad and prominent; public heroes and content panels form a related large-radius family; dashboard links and controls use smaller radii; navigation may use capsules. Hairlines divide related rows within a surface.
 
-Sharpness is part of the product meaning: this is controlled execution, not casual social software.
+Pills are appropriate for compact navigation, badges, and written status labels. They are not general-purpose containers for paragraphs or financial records.
 
 ## Components
 
-### Execution Receipt
+### Brand and navigation
 
-The Execution Receipt is the principal proof component. It appears on the landing page, in the claim page, in the transaction detail view and in shareable demo material.
+`Wordmark` is the single replacement seam for the temporary text logo used by public and dashboard navigation. Replace its internals when final logo artwork is approved; do not duplicate brand assets in each shell. Preserve the “Solvo home” accessible name wherever the mark links home.
 
-```text
-SOLVO PAYMENT / 00421
+Desktop public navigation presents Product, How it works, Telegram, and Open Solvo. Product targets `/#product`. Mobile navigation may expose additional public routes, must communicate expanded state, close on Escape, and restore focus to its trigger.
 
-REQUESTED BY / @alex
-RECIPIENT    / 0x742d…B91A
-AMOUNT       / 5.00 USDC
-NETWORK      / BASE
-STATUS       / COMPLETED
-EXECUTION    / KH-8A12
-TX HASH      / 0x91…E4C
-AUDIT        / VIEW RECORD
-```
+### Homepage artwork
 
-Rules:
+`HeroArtwork` is decorative inline SVG supported by CSS gradients, circuit paths, and orange core light. Keep it hidden from assistive technology because the adjacent six written labels and hero copy carry the meaning. The active homepage must not render `Lamp` or `HeroTypingWordmark`.
 
-- Amount and status appear before low-level IDs.
-- Destination is shown before approval.
-- Simulation and real execution are visibly different in wording.
-- A hash is never presented without a link or explanation of what it proves.
-- Do not replace the receipt with a celebratory animation.
+### Public content panels
 
-### Execution Line
+Page heroes establish route context. Content panels group one coherent explanation, decision, or proof. Nested rows use hairlines rather than independent floating cards. Keep primary information in heading order and avoid turning every paragraph into a separate panel.
 
-```text
-REQUESTED → VALIDATED → APPROVED → SUBMITTED → COMPLETED
-```
+### Financial primitives
 
-Use one active state at a time. The current state must be readable without colour. Failure states use direct labels such as `VALIDATION FAILED`, `SIMULATION FAILED`, `EXECUTION FAILED` or `REVIEW REQUIRED`.
+Payment previews show destination and amount before approval. Placeholder approval controls remain disabled and explicitly say that the preview is not connected.
 
-### Payment preview
+Batch summaries precede recipient-level detail and expose recipients, total, validation, duplicates, approval, and a written status. Missing values render as an em dash; they are never fabricated.
 
-```text
-PAYMENT REQUEST
+Execution receipts preserve the supplied field order and emphasize amount, recipient, and transaction hash. A completed state requires execution evidence. Simulation copy must state that no funds moved and must never call a simulation a transaction. Hashes and addresses must wrap, remain selectable, and retain semantic label/value markup.
 
-TO        / 0x742d…B91A
-AMOUNT    / 5 USDC
-NETWORK   / BASE
-REQUESTED / @alex
-APPROVAL  / REQUIRED
+### Dashboard navigation
 
-[ APPROVE ]  [ CANCEL ]
-```
-
-The preview is a dark card with a restrained border and ample whitespace. The approval action must not compete with the destination and amount.
-
-### Batch summary
-
-```text
-PAYOUT / COMMUNITY REWARDS
-
-RECIPIENTS / 42
-TOTAL      / 850 USDC
-VALID      / 41
-DUPLICATES / 1
-APPROVAL   / TREASURY ADMIN
-STATUS     / REVIEW REQUIRED
-```
-
-Use the summary before the recipient-level table. A community treasurer must understand risk before approving the batch.
-
-### Buttons
-
-Solvo uses few buttons.
-
-- Primary action: transparent background, 1px `rgba(255,255,255,0.15)` border, off-white label, `10px 24px` padding, `2px` radius.
-- Hover: border brightens to `rgba(255,255,255,0.35)`; no fill change.
-- Destructive/cancel action: text link or same outline treatment; never saturated red.
-- Telegram deep link: can use the same outline action; do not imitate Telegram’s blue brand palette.
-- Never use a filled coloured CTA.
-
-### Cards
-
-- Main card: `#232323`, `4px` radius, subtle border, one soft ambient shadow.
-- Receipt card: same surface and radius, with a clear top label and structured rows.
-- Bottom feature cells: one continuous strip with vertical hairlines; no individual shadows.
-- Keep card count low. Do not turn every piece of copy into a panel.
-
-### Lamp and custom SVG
-
-There is exactly one illustrated element on the landing page: the pendant lamp.
-
-Required elements:
-
-- small ceiling mount;
-- bent or kinked cable with a slight adjustable jog;
-- dark conical or dome shade;
-- visible white bulb;
-- soft radial glow beneath the bulb.
-
-For Solvo, the lamp has a product meaning:
-
-- cable = the request travelling through the execution system;
-- shade = policy and approval containing risk;
-- bulb = confirmed value movement;
-- glow = evidence that the transaction reached a verifiable state.
-
-The cable should not become an abstract blockchain network. It is one path from intent to completion.
-
-Stroke widths:
-
-- cable and structural lines: `2px`;
-- small arrows and UI lines: `1.5px`;
-- cable colour: `#2E2E2E`;
-- structural accent: low-opacity `#EDEDED`.
-
-No second illustration, mascot, coin, wallet, robot, chain, token pile or decorative chart should appear in the hero.
-
-## Interaction & Motion
-
-- Page load: lamp and ghosted wordmark fade in first over `600ms`.
-- Visible wordmark and headline follow with a `200ms` stagger.
-- Navigation fades in last.
-- Use opacity only on initial load; do not slide or scale the composition.
-- The lamp glow may breathe almost imperceptibly over `4s`.
-- Execution Line transitions use opacity and a short colourless emphasis, not a racing animation.
-- Status changes should be announced in text for assistive technology.
-- Respect `prefers-reduced-motion` by removing glow breathing and all staged transitions.
-- No parallax, scroll-jacking or autoplay narrative.
-
-## Responsive Behaviour
-
-- At mobile widths, card padding reduces to `24px`.
-- The lamp remains centred and overlaps the card edge.
-- The ghosted `SOLVO` wordmark scales down but remains oversized relative to the visible wordmark.
-- The three feature cells become a vertical stack with horizontal hairlines.
-- Receipt rows remain readable; long hashes truncate with a visible copy action or full-value expansion.
-- The amount, destination and current status remain above the fold.
-- Navigation can collapse to text links or a minimal menu, but the single-light-source composition remains.
-
-## Accessibility
-
-- Never encode status with lightness alone; use explicit state words.
-- Body text must be readable against `#232323` and `#141414`.
-- Focus states use a visible off-white outline or double-line treatment.
-- All transaction actions have text labels.
-- Destination addresses and hashes are selectable and copyable.
-- Error messages explain the cause and next safe action.
-- Simulated results always state that no funds moved.
-- Motion is optional and removable.
+The dashboard marks exact and nested active routes with `aria-current="page"`, a surface change, readable text, and an orange positional marker. The marker is supplementary, not the only active-state cue. The mobile menu closes after pathname changes and supports Escape with focus return.
 
 ## Do's and Don'ts
 
 ### Do
 
-- Make amount, destination, approval requirement and status easy to find.
-- Use the Execution Receipt as the repeated proof asset.
-- Treat the lamp as a metaphor for confirmed execution.
-- Preserve darkness as a calm trust signal, not as decoration.
-- Use sparse copy and direct state names.
-- Keep the interface quiet until a decision or proof needs attention.
-- Use the same Execution Line in landing, Telegram previews, receipts and demo slides.
+- Use black planes, warm neutral text, and orange as a controlled brand signal.
+- Keep destination, amount, approval requirement, execution state, and proof easy to scan.
+- Pair every state color or marker with explicit language.
+- Preserve visible keyboard focus and remove nonessential motion when reduced motion is requested.
+- Distinguish unavailable, simulated, pending, executed, failed, and proved states truthfully.
+- Keep the homepage artwork CSS/SVG-based and decorative.
 
 ### Don't
 
-- Add an accent colour to make the page feel more energetic.
-- Use neon blockchain gradients, coins, chains or AI glow effects.
-- Use generic chat bubbles as the brand symbol.
-- Hide the destination address behind clever copy.
-- Show a success state before KeeperHub confirmation.
-- Use confetti, trophies, streaks or celebratory payment animations.
-- Turn every feature into a separate card.
-- Let the lamp become a decorative illustration unrelated to the transaction.
-- Use thin low-contrast type for money, status or error information.
-- Call a simulated transaction “complete.”
-
-## Implementation Notes
-
-The design is intentionally small enough for the hackathon MVP:
-
-- SvelteKit landing and claim page;
-- dark single-card shell;
-- receipt and Execution Line components;
-- no dashboard dependency for the first real transaction;
-- Telegram handles the operational workflow;
-- receipt data comes from persisted payout and execution state;
-- the lamp and ghosted wordmark are CSS/SVG assets, not a dependency on external imagery.
-
-The visual system must remain credible when the landing page is replaced by a transaction receipt. Proof is the brand moment.
+- Restore the monochrome lamp, ghost wordmark, or typing animation as the active homepage identity.
+- Call a simulation complete or imply that funds moved without execution evidence.
+- Enable placeholder financial controls or invent values for empty states.
+- Hide addresses, hashes, failure causes, or the next safe action.
+- Rely on orange, lightness, animation, or position alone to communicate status.
+- Duplicate logo implementation outside the shared `Wordmark` seam.

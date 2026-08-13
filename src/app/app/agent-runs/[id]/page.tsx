@@ -40,13 +40,13 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
   const { run } = model;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-muted">
         <Link href="/app/agent-runs" className="transition-colors hover:text-primary">
           Agent runs
         </Link>
       </p>
-      <header className="mt-3 border-b border-line pb-6">
+      <header className="mt-3 border-b border-line pb-7">
         <SectionLabel>Agent run</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           {model.decisionLabel}
@@ -54,7 +54,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
         <p className="mt-3 font-data text-[12px] tracking-[0.05em] text-muted">{run.runId}</p>
       </header>
 
-      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mt-8 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         <DetailCell label="Status" value={model.statusLabel} />
         <DetailCell label="Surface" value={model.surfaceLabel} />
         <DetailCell label="PROVIDER" value={run.provider} />
@@ -92,7 +92,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
 
       <section className="mt-10">
         <SectionLabel>User request</SectionLabel>
-        <div className="hairline-top mt-4">
+        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919] px-5">
           {run.rawTextRedacted !== null ? (
             <p className="py-4 text-[12px] leading-[1.6] tracking-[0.05em] text-secondary">{run.rawTextRedacted}</p>
           ) : (
@@ -103,7 +103,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
 
       <section className="mt-10">
         <SectionLabel>Outcome</SectionLabel>
-        <div className="hairline-top mt-4">
+        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919] px-5">
           {run.errorMessageRedacted !== null ? (
             <p className="py-4 text-[12px] leading-[1.6] tracking-[0.05em] text-secondary">
               Error{run.errorCode !== null ? ` ${run.errorCode}` : ""}: {run.errorMessageRedacted}
@@ -130,7 +130,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
 
 function DetailCell({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="bg-void px-5 py-5">
+    <div className="min-w-0 bg-[#191919] px-5 py-5">
       <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">{label}</p>
       <div className="mt-2 font-data text-[12px] leading-[1.5] tracking-[0.04em] text-primary">{value}</div>
     </div>

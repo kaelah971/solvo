@@ -14,8 +14,8 @@ import { StatePanel } from "@/components/StatePanel";
 
 export function DashboardUnavailable() {
   return (
-    <div className="site-substrate min-h-screen">
-      <div className="site-inner mx-auto w-full max-w-6xl px-6 py-12 md:py-16">
+    <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
+      <div className="overflow-hidden rounded-2xl border border-border bg-[#191919]">
         <StatePanel
           badge="WORKSPACE DASHBOARD UNAVAILABLE"
           tone="error"
@@ -33,8 +33,8 @@ export function DashboardUnavailable() {
 
 export function DashboardNotFound() {
   return (
-    <div className="site-substrate min-h-screen">
-      <div className="site-inner mx-auto w-full max-w-6xl px-6 py-12 md:py-16">
+    <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
+      <div className="overflow-hidden rounded-2xl border border-border bg-[#191919]">
         <StatePanel
           badge="REQUEST NOT FOUND"
           tone="error"

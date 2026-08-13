@@ -60,12 +60,12 @@ export function ClaimForm({ token, amountUsdc }: ClaimFormProps) {
           placeholder="0x…"
           autoComplete="off"
           spellCheck={false}
-          className="mt-3 w-full border border-border bg-void px-4 py-3 font-data text-[12px] leading-[1.35] tracking-[0.04em] text-primary placeholder:text-faint"
+          className="mt-3 w-full rounded-[14px] border border-border bg-black/25 px-4 py-3 font-data text-[12px] leading-[1.35] tracking-[0.04em] text-primary placeholder:text-faint focus:border-[var(--color-orange,#ff6a1a)]"
         />
         <button
           type="submit"
           disabled={isPending}
-          className="mt-4 border border-primary px-6 py-3 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-primary transition-colors hover:bg-primary hover:text-void disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 rounded-full border border-[var(--color-orange,#ff6a1a)] bg-[var(--color-orange,#ff6a1a)] px-6 py-3 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPending ? "Recording…" : "Submit destination"}
         </button>
@@ -81,7 +81,7 @@ export function ClaimForm({ token, amountUsdc }: ClaimFormProps) {
           role="status"
           aria-live="polite"
           className={
-            "mt-4 border px-4 py-3 text-[12px] leading-[1.5] tracking-[0.04em] " +
+            "mt-4 rounded-[14px] border px-4 py-3 text-[12px] leading-[1.5] tracking-[0.04em] " +
             (result.ok
               ? "border-border text-secondary"
               : result.state === "invalid_address"

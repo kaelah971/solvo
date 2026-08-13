@@ -59,7 +59,7 @@ export default async function ReceiptPage({
         </StatePanel>
       </div>
 
-      <section className="mx-auto mt-24 w-full max-w-3xl border-t border-line pt-10">
+      <section className="content-panel mx-auto mt-8 w-full max-w-3xl rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>The Solvo Execution Receipt</SectionLabel>
         <h2 className="mt-5 font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           One record for every completed payment.

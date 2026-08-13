@@ -36,8 +36,8 @@ export default async function MembersPage() {
   if (!model.ok) return <DashboardUnavailable />;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
-      <header className="border-b border-line pb-6">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+      <header className="border-b border-line pb-7">
         <SectionLabel>Directory</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           Members
@@ -55,16 +55,16 @@ export default async function MembersPage() {
           No members recorded in this workspace.
         </p>
       ) : (
-        <ul className="mt-6">
+        <ul className="mt-6 overflow-hidden rounded-xl border border-line bg-[#191919]">
           {model.items.map((item) => (
-            <li key={item.view.memberId} className="hairline-top py-4">
+            <li key={item.view.memberId} className="hairline-top px-5 py-4 sm:px-6">
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                 <p className="text-[13px] font-medium tracking-[0.05em] text-primary">{item.view.maskedId}</p>
                 <div className="flex flex-wrap gap-2">
-                  <span className="border border-border px-3 py-1.5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-secondary">
+                  <span className="rounded-full border border-border bg-white/[0.025] px-3 py-1.5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.16em] text-secondary">
                     {item.roleLabel}
                   </span>
-                  <span className="border border-border px-3 py-1.5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] text-muted">
+                  <span className="rounded-full border border-border bg-white/[0.025] px-3 py-1.5 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.16em] text-muted">
                     {item.statusLabel}
                   </span>
                 </div>

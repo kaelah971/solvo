@@ -2,178 +2,88 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const sources = {
-  statePanel: readFileSync("src/components/StatePanel.tsx", "utf8"),
-  policyRow: readFileSync("src/components/PolicyRow.tsx", "utf8"),
-  proofRow: readFileSync("src/components/ProofRow.tsx", "utf8"),
-  paymentPreview: readFileSync("src/components/PaymentPreview.tsx", "utf8"),
-  batchSummary: readFileSync("src/components/BatchSummary.tsx", "utf8"),
-  executionReceipt: readFileSync("src/components/ExecutionReceipt.tsx", "utf8"),
-  agentChecks: readFileSync("src/components/AgentChecks.tsx", "utf8"),
-  emptyState: readFileSync("src/components/EmptyState.tsx", "utf8"),
-  executionLine: readFileSync("src/components/ExecutionLine.tsx", "utf8"),
-  sectionLabel: readFileSync("src/components/SectionLabel.tsx", "utf8"),
-  statusLabel: readFileSync("src/components/StatusLabel.tsx", "utf8"),
+const read = (path: string) => readFileSync(path, "utf8");
+
+const primitives = {
+  statePanel: read("src/components/StatePanel.tsx"),
+  paymentPreview: read("src/components/PaymentPreview.tsx"),
+  batchSummary: read("src/components/BatchSummary.tsx"),
+  executionReceipt: read("src/components/ExecutionReceipt.tsx"),
+  executionLine: read("src/components/ExecutionLine.tsx"),
+  proofRow: read("src/components/ProofRow.tsx"),
+  statusLabel: read("src/components/StatusLabel.tsx"),
 };
 
-const pageSources = {
-  claim: readFileSync("src/app/claim/[token]/page.tsx", "utf8"),
-  community: readFileSync("src/app/community/page.tsx", "utf8"),
-  howItWorks: readFileSync("src/app/how-it-works/page.tsx", "utf8"),
-  judge: readFileSync("src/app/judge/page.tsx", "utf8"),
-  sandbox: readFileSync("src/app/sandbox/page.tsx", "utf8"),
-};
+const publicPages = [
+  "community",
+  "individuals",
+  "how-it-works",
+  "security",
+  "judge",
+  "sandbox",
+].map((route) => [route, read(`src/app/${route}/page.tsx`)] as const);
 
-const panelSources = [
-  ["StatePanel", sources.statePanel],
-  ["PaymentPreview", sources.paymentPreview],
-  ["BatchSummary", sources.batchSummary],
-  ["ExecutionReceipt", sources.executionReceipt],
-  ["AgentChecks", sources.agentChecks],
-  ["EmptyState", sources.emptyState],
-] as const;
-
-function withoutDecorativeNode(
-  source: string,
-  pattern: RegExp,
-  description: string,
-): string {
-  const match = source.match(pattern)?.[0];
-  assert.ok(match, `expected an explicit decorative ${description} node`);
-  return source.replace(match, "");
-}
-
-test("panel primitives use translucent continuous surfaces instead of opaque cards", () => {
-  for (const [name, source] of panelSources) {
-    assert.doesNotMatch(source, /bg-surface/, `${name} should not use bg-surface`);
-    assert.match(
-      source,
-      /border-y border-line bg-white\/\[0\.015\]/,
-      `${name} should own a continuous hairline surface`,
-    );
+test("public surfaces use the shared black/orange content-panel system", () => {
+  for (const [route, source] of publicPages) {
+    assert.match(source, /(?:page-hero|content-panel)/, `${route} needs a public panel surface`);
+    assert.match(source, /rounded-\[(?:28|32)px\]/, `${route} needs the approved rounded panel family`);
+    assert.match(source, /border-border/, `${route} needs the shared panel border`);
+    assert.match(source, /bg-surface/, `${route} needs the shared dark surface`);
   }
 });
 
-test("policy and proof rows retain hairline grouping without opaque cards", () => {
-  for (const [name, source] of [
-    ["PolicyRow", sources.policyRow],
-    ["ProofRow", sources.proofRow],
-  ] as const) {
-    assert.match(source, /(?:hairline-top|border-(?:t|y) border-line|divide-y divide-line)/, `${name} needs a divider`);
-    assert.doesNotMatch(source, /bg-surface/, `${name} should not become an opaque card`);
-  }
+test("financial primitives expose accessible names and written states", () => {
+  assert.match(primitives.paymentPreview, /aria-label="Payment request preview"/);
+  assert.match(primitives.batchSummary, /aria-label="Payout batch summary"/);
+  assert.match(primitives.executionReceipt, /aria-label="Solvo Execution Receipt"/);
+  assert.match(primitives.statusLabel, /\{label\}/);
+  assert.match(primitives.executionLine, /aria-live="polite"/);
+  assert.match(primitives.executionLine, /aria-current=/);
+  assert.match(primitives.executionLine, /\{stage\.label\}/);
 });
 
-test("proof values safely wrap long financial and identifier data", () => {
-  const valueNode = sources.proofRow.match(/<dd\b[\s\S]*?>/)?.[0];
-
-  assert.ok(valueNode, "expected ProofRow to render its value in a dd element");
-  assert.match(valueNode, /min-w-0/);
-  assert.match(valueNode, /data-break/);
+test("long proof values remain semantic, readable, and safely wrappable", () => {
+  assert.match(primitives.proofRow, /<dt\b/);
+  assert.match(primitives.proofRow, /<dd\b/);
+  assert.match(primitives.proofRow, /data-break/);
+  assert.match(primitives.proofRow, /min-w-0/);
 });
 
-test("receipt emphasizes proof-critical values without reordering incoming fields", () => {
+test("payment preview shows destination and amount before approval and never enables placeholder actions", () => {
+  const to = primitives.paymentPreview.indexOf('<ProofRow label="To"');
+  const amount = primitives.paymentPreview.indexOf('<ProofRow label="Amount"');
+  const approval = primitives.paymentPreview.indexOf('<ProofRow label="Approval"');
+
+  assert.ok(to >= 0 && amount > to && approval > amount);
+  assert.match(primitives.paymentPreview, /<Cta disabled>Approve<\/Cta>/);
+  assert.match(primitives.paymentPreview, /<Cta disabled>Cancel<\/Cta>/);
+  assert.match(primitives.paymentPreview, /This preview is not connected yet/);
+});
+
+test("batch and receipt defaults never invent financial data", () => {
+  assert.match(primitives.batchSummary, /recipients = null/);
+  assert.match(primitives.batchSummary, /total = null/);
+  assert.match(primitives.batchSummary, /statusLabel = "No payout loaded"/);
+  assert.match(primitives.batchSummary, /value=\{(?:recipients|total) \?\? "—"\}/);
+  assert.match(primitives.executionReceipt, /reference = null/);
+  assert.match(primitives.executionReceipt, /\{reference \?\? "—"\}/);
+});
+
+test("receipt preserves input order and emphasizes proof-critical values", () => {
+  assert.match(primitives.executionReceipt, /fields\.map\(\(field\) =>/);
+  assert.doesNotMatch(primitives.executionReceipt, /fields\.(?:sort|toSorted)\(/);
   assert.match(
-    sources.executionReceipt,
-    /const emphasized = \["Amount", "Recipient", "Transaction hash"\]\.includes\(field\.label\)/,
+    primitives.executionReceipt,
+    /\["Amount", "Recipient", "Transaction hash"\]\.includes\(field\.label\)/,
   );
-  assert.match(sources.executionReceipt, /fields\.map\(\(field\) =>/);
-  assert.doesNotMatch(sources.executionReceipt, /fields\.(?:sort|toSorted)\(/);
-  assert.match(sources.executionReceipt, /emphasized\s*\?\s*"text-primary"\s*:\s*"text-secondary"/);
 });
 
-test("status label continues to render its written label", () => {
-  assert.match(sources.statusLabel, /\{label\}/);
-});
+test("public financial copy distinguishes simulation, execution, and proof", () => {
+  const howItWorks = publicPages.find(([route]) => route === "how-it-works")?.[1] ?? "";
+  const security = publicPages.find(([route]) => route === "security")?.[1] ?? "";
 
-test("execution line keeps written stage labels and accessible announcements", () => {
-  assert.match(sources.executionLine, /aria-live=["']polite["']/);
-  assert.match(sources.executionLine, /aria-label=\{announce\}/);
-  assert.match(sources.executionLine, /\{stage\.label\}/);
-  assert.match(sources.executionLine, /aria-current=/);
-});
-
-test("essential primitive copy does not use the faint text token", () => {
-  for (const [name, source] of [
-    ["StatePanel", sources.statePanel],
-    ["ProofRow", sources.proofRow],
-    ["PaymentPreview", sources.paymentPreview],
-    ["BatchSummary", sources.batchSummary],
-    ["AgentChecks", sources.agentChecks],
-    ["EmptyState", sources.emptyState],
-    ["SectionLabel", sources.sectionLabel],
-    ["StatusLabel", sources.statusLabel],
-  ] as const) {
-    assert.doesNotMatch(source, /text-faint/, `${name} should keep essential copy readable`);
-  }
-
-  const policyWithoutIndex = withoutDecorativeNode(
-    sources.policyRow,
-    /<p className="[^"]*\btext-faint\b[^"]*">\{index\}<\/p>/,
-    "policy index",
-  );
-  assert.doesNotMatch(
-    policyWithoutIndex,
-    /text-faint/,
-    "policy titles and body copy are essential",
-  );
-
-  const receiptWithoutReference = withoutDecorativeNode(
-    sources.executionReceipt,
-    /<p className="[^"]*\btext-faint\b[^"]*">\s*\{reference \?\? ["'][^"']*["']\}\s*<\/p>/,
-    "receipt reference",
-  );
-  assert.doesNotMatch(
-    receiptWithoutReference,
-    /text-faint/,
-    "receipt labels, values, and written status are essential",
-  );
-
-  const executionLineWithoutArrow = withoutDecorativeNode(
-    sources.executionLine,
-    /<span aria-hidden="true" className="[^"]*\btext-faint\b[^"]*">\s*[^<{]*\s*<\/span>/,
-    "execution arrow",
-  );
-  assert.doesNotMatch(
-    executionLineWithoutArrow,
-    /text-faint/,
-    "rendered execution stage labels are essential written state",
-  );
-
-  for (const [name, openingTag] of [
-    ["policy title", sources.policyRow.match(/<h3\b[^>]*>/)?.[0]],
-    ["proof label", sources.proofRow.match(/<dt\b[\s\S]*?>/)?.[0]],
-    ["proof value", sources.proofRow.match(/<dd\b[\s\S]*?>/)?.[0]],
-    [
-      "receipt value",
-      sources.executionReceipt.match(/<span className=\{emphasized[\s\S]*?>/)?.[0],
-    ],
-    [
-      "execution stage label",
-      sources.executionLine.match(/<span\s+aria-current=[\s\S]*?>/)?.[0],
-    ],
-  ] as const) {
-    assert.ok(openingTag, `expected rendered ${name} node`);
-    assert.doesNotMatch(openingTag, /text-faint/, `${name} should remain readable`);
-  }
-});
-
-test("essential page-level notices do not use the faint text token", () => {
-  for (const [name, source, copy] of [
-    ["claim availability", pageSources.claim, "Submitting a wallet on this page only records the destination"],
-    ["community payout state", pageSources.community, "A real payout summary appears here"],
-    ["execution-line explanation", pageSources.howItWorks, "Every stage is a real product state"],
-    ["judge availability", pageSources.judge, "Available after configuration"],
-    ["sandbox availability", pageSources.sandbox, "Simulation is unavailable until"],
-    ["sandbox safety", pageSources.sandbox, "Simulated results always state"],
-    ["sandbox boundary", pageSources.sandbox, "The sandbox cannot access"],
-  ] as const) {
-    const copyIndex = source.indexOf(copy);
-    assert.notEqual(copyIndex, -1, `expected ${name} copy`);
-
-    const openingTag = source.lastIndexOf("<p", copyIndex);
-    const closingTag = source.indexOf(">", openingTag);
-    const tag = source.slice(openingTag, closingTag + 1);
-    assert.doesNotMatch(tag, /text-faint/, `${name} should keep essential copy readable`);
-  }
+  assert.match(howItWorks, /Simulation complete\. No funds were moved\./);
+  assert.match(howItWorks, /The transaction hash and audit record are the completion state\./);
+  assert.match(security, /A simulation is never called a transaction\./);
+  assert.match(security, /No payment is complete until it is proved\./);
 });

@@ -11,10 +11,10 @@ type ExecutionLineProps = {
 };
 
 const stageStyles: Record<ExecutionStage["status"], string> = {
-  complete: "text-state-complete",
-  current: "text-primary underline decoration-[rgba(237,237,237,0.4)] underline-offset-4",
+  complete: "border-[color:var(--color-orange,#ff6a1a)]/40 text-[var(--color-orange,#ff6a1a)]",
+  current: "border-[color:var(--color-orange,#ff6a1a)] bg-[var(--color-orange,#ff6a1a)] text-black",
   pending: "text-muted",
-  failed: "text-state-error",
+  failed: "border-state-error/40 text-state-error",
 };
 
 /**
@@ -29,18 +29,18 @@ export function ExecutionLine({ stages, className = "", announce }: ExecutionLin
       aria-live="polite"
       aria-atomic="true"
       aria-label={announce}
-      className={`flex flex-wrap items-center gap-x-3 gap-y-2 ${className}`}
+      className={`flex flex-wrap items-center gap-2 ${className}`}
     >
       {stages.map((stage, index) => (
-        <span key={stage.label} className="flex items-center gap-x-3">
+        <span key={stage.label} className="flex items-center gap-2">
           {index > 0 && (
-            <span aria-hidden="true" className="text-[11px] text-faint">
+            <span aria-hidden="true" className="text-[10px] text-faint">
               →
             </span>
           )}
           <span
             aria-current={stage.status === "current" ? "step" : undefined}
-            className={`text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.2em] ${stageStyles[stage.status]}`}
+            className={`rounded-full border border-transparent px-3 py-2 text-[10px] font-semibold uppercase leading-[1.2] tracking-[0.16em] ${stageStyles[stage.status]}`}
           >
             {stage.label}
           </span>

@@ -125,7 +125,7 @@ export default async function ClaimPage({
         {panel}
       </div>
 
-      <section className="mx-auto mt-24 w-full max-w-3xl border-t border-line pt-10">
+      <section className="content-panel mx-auto mt-8 w-full max-w-3xl rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>How a claim works</SectionLabel>
         <h2 className="mt-5 font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
           The destination appears before anything moves.
@@ -151,20 +151,20 @@ function ClaimSummary({
   expiresAt: string;
 }) {
   return (
-    <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <div className="hairline-top pt-3">
+    <div className="content-panel mb-4 grid grid-cols-1 overflow-hidden rounded-[24px] border border-border bg-surface sm:grid-cols-3 sm:divide-x sm:divide-line">
+      <div className="border-b border-line p-5 sm:border-b-0">
         <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">Amount</p>
         <p className="mt-1 font-data text-[14px] leading-[1.3] tracking-[0.04em] text-primary">
           {amountUsdc} USDC
         </p>
       </div>
-      <div className="hairline-top pt-3">
+      <div className="border-b border-line p-5 sm:border-b-0">
         <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">Network</p>
         <p className="mt-1 font-data text-[14px] leading-[1.3] tracking-[0.04em] text-primary">
           BASE · {workspaceName}
         </p>
       </div>
-      <div className="hairline-top pt-3">
+      <div className="p-5">
         <p className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">Expires</p>
         <p className="mt-1 font-data text-[14px] leading-[1.3] tracking-[0.04em] text-primary">
           {expiresAt.replace("T", " ").slice(0, 19)} UTC
@@ -212,7 +212,7 @@ function ClaimProof({ txHash, txExplorerUrl }: { txHash: string | null; txExplor
 
 function ClaimExplanation() {
   return (
-    <section className="mx-auto mt-24 w-full max-w-3xl border-t border-line pt-10">
+    <section className="content-panel mx-auto mt-8 w-full max-w-3xl rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
       <SectionLabel>When a claim is connected</SectionLabel>
       <h2 className="mt-5 font-display text-2xl font-medium leading-[1.15] tracking-[-0.01em] text-primary md:text-3xl">
         The destination appears before anything moves.

@@ -37,8 +37,8 @@ export default async function ApprovalsPage() {
   if (!model.ok) return <DashboardUnavailable />;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
-      <header className="border-b border-line pb-6">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+      <header className="border-b border-line pb-7">
         <SectionLabel>Queue</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           Approvals
@@ -49,7 +49,7 @@ export default async function ApprovalsPage() {
         </p>
       </header>
 
-      <div className="hairline-top mt-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 py-4">
+      <div className="mt-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 rounded-xl border border-line bg-[#191919] px-5 py-4">
         <p className="text-[12px] leading-[1.5] tracking-[0.05em] text-primary">{model.capability.copy}</p>
         <p className="text-[11px] leading-[1.5] tracking-[0.06em] text-muted">
           Requesters cannot approve their own payout.
@@ -63,7 +63,7 @@ export default async function ApprovalsPage() {
           {model.payouts.length > 0 && (
             <section className="mt-10">
               <SectionLabel>Payouts waiting</SectionLabel>
-              <div className="hairline-top mt-4">
+              <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919]">
                 {model.payouts.map((item) => (
                   <QueueRow key={item.payoutId}>
                     <Link href={`/app/payouts/${item.payoutId}`} className="block transition-colors hover:opacity-80">
@@ -95,7 +95,7 @@ export default async function ApprovalsPage() {
           {model.batches.length > 0 && (
             <section className="mt-12">
               <SectionLabel>Batches waiting</SectionLabel>
-              <div className="hairline-top mt-4">
+              <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919]">
                 {model.batches.map((item) => (
                   <QueueRow key={item.payoutId}>
                     <Link href={`/app/batches/${item.payoutId}`} className="block transition-colors hover:opacity-80">
@@ -130,7 +130,7 @@ export default async function ApprovalsPage() {
           {model.claims.length > 0 && (
             <section className="mt-12">
               <SectionLabel>Claimed claims waiting</SectionLabel>
-              <div className="hairline-top mt-4">
+              <div className="mt-4 overflow-hidden rounded-xl border border-line bg-[#191919]">
                 {model.claims.map((item) => (
                   <QueueRow key={item.claimId}>
                     <Link href={`/app/claims/${item.claimId}`} className="block transition-colors hover:opacity-80">
@@ -187,7 +187,7 @@ export default async function ApprovalsPage() {
 }
 
 function QueueRow({ children }: { children: React.ReactNode }) {
-  return <div className="hairline-top py-4">{children}</div>;
+  return <div className="hairline-top px-5 py-4 transition-colors hover:bg-white/[0.025]">{children}</div>;
 }
 
 function SelfNote({ children }: { children: React.ReactNode }) {

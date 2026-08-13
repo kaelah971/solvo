@@ -21,8 +21,8 @@ const sectionHeading =
 export default function SandboxPage() {
   return (
     <PageShell>
-      <header className="mt-14 md:mt-20">
-        <div className="border border-border bg-surface px-6 py-6">
+      <header className="page-hero mt-10 rounded-[32px] border border-border bg-surface px-6 py-10 sm:px-10 sm:py-14 md:mt-16">
+        <div className="rounded-[20px] border border-line bg-black/15 px-6 py-6">
           <div className="flex flex-col gap-3">
             <SectionLabel>Sandbox</SectionLabel>
             <StatusLabel label="Simulation only" tone="pending" className="text-[13px]" />
@@ -43,7 +43,7 @@ export default function SandboxPage() {
         </p>
       </header>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Payment instruction</SectionLabel>
         <h2 className={sectionHeading}>Submit a simulated payment.</h2>
         <div className="mt-8 max-w-xl">
@@ -52,7 +52,7 @@ export default function SandboxPage() {
             aria-disabled="true"
             aria-label="Payment instruction"
             placeholder="Waiting for a payment instruction"
-            className="min-h-24 w-full resize-none border border-border bg-surface px-4 py-3 text-[13px] leading-[1.6] tracking-[0.05em] text-secondary placeholder:text-faint disabled:cursor-not-allowed disabled:opacity-70"
+            className="min-h-28 w-full resize-none rounded-[16px] border border-border bg-black/20 px-4 py-3 text-[13px] leading-[1.6] tracking-[0.05em] text-secondary placeholder:text-faint disabled:cursor-not-allowed disabled:opacity-70"
           />
           <div className="mt-4">
             <Cta disabled title="The sandbox backend is not connected">
@@ -65,7 +65,7 @@ export default function SandboxPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Agent checks</SectionLabel>
         <h2 className={sectionHeading}>The agent shows its working.</h2>
         <div className="mt-8 max-w-xl">
@@ -77,7 +77,7 @@ export default function SandboxPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Policy result</SectionLabel>
         <h2 className={sectionHeading}>Policy evaluation.</h2>
         <div className="mt-8 max-w-xl">
@@ -88,7 +88,7 @@ export default function SandboxPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Execution line</SectionLabel>
         <h2 className={sectionHeading}>The simulated path.</h2>
         <div className="mt-8 max-w-xl">
@@ -108,7 +108,7 @@ export default function SandboxPage() {
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="content-panel mt-8 rounded-[28px] border border-border bg-surface px-6 py-10 sm:px-10">
         <SectionLabel>Simulation receipt</SectionLabel>
         <h2 className={sectionHeading}>The simulated receipt.</h2>
         <div className="mt-8 max-w-2xl">

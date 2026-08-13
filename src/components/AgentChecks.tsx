@@ -41,7 +41,7 @@ export function AgentChecks({
 }: AgentChecksProps) {
   if (items.length === 0) {
     return (
-      <div className={`border-y border-line bg-white/[0.015] px-6 py-8 ${className}`}>
+      <div className={`content-panel rounded-[24px] border border-border bg-surface px-6 py-8 ${className}`}>
         <p className="text-center text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] text-muted">
           {emptyLabel}
         </p>
@@ -55,13 +55,13 @@ export function AgentChecks({
   }
 
   return (
-    <ul className={`divide-y divide-line border-y border-line bg-white/[0.015] ${className}`}>
+    <ul className={`content-panel divide-y divide-line overflow-hidden rounded-[24px] border border-border bg-surface ${className}`}>
       {items.map((item) => {
         const status: CheckStatus = item.status ?? "waiting";
         return (
           <li
             key={item.label}
-            className="flex flex-col gap-1 px-6 py-3 sm:flex-row sm:items-baseline sm:gap-4"
+            className="flex flex-col gap-2 px-6 py-4 sm:flex-row sm:items-baseline sm:gap-4"
           >
             <span
               className={`shrink-0 text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.15em] sm:w-[88px] ${statusStyles[status]}`}

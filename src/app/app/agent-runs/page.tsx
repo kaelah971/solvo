@@ -37,8 +37,8 @@ export default async function AgentRunsPage() {
   if (!model.ok) return <DashboardUnavailable />;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-14">
-      <header className="border-b border-line pb-6">
+    <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+      <header className="border-b border-line pb-7">
         <SectionLabel>Observability</SectionLabel>
         <h1 className="mt-3 font-display text-2xl font-medium leading-[1.1] tracking-[-0.01em] text-primary md:text-3xl">
           Agent runs
@@ -55,9 +55,9 @@ export default async function AgentRunsPage() {
           No agent requests recorded yet.
         </p>
       ) : (
-        <ul className="mt-6">
+        <ul className="mt-6 overflow-hidden rounded-xl border border-line bg-[#191919]">
           {model.items.map((item) => (
-            <li key={item.view.runId} className="hairline-top py-4">
+            <li key={item.view.runId} className="hairline-top px-5 py-4 transition-colors hover:bg-white/[0.025] sm:px-6">
               <Link
                 href={`/app/agent-runs/${item.view.runId}`}
                 className="block transition-colors hover:opacity-80"
