@@ -3,7 +3,7 @@ import { Bot, Context, InlineKeyboard } from "grammy";
 import { PostgresRepository } from "../db/postgres-repository.ts";
 import * as accessor from "../db/accessor.ts";
 import { getTelegramConfig, DEFAULT_BOT_USERNAME } from "./config.ts";
-import { parseInstruction } from "./parsing.ts";
+import { normalizeAddressedCommand, parseInstruction } from "./parsing.ts";
 import { handlePayInstruction, resolveMode } from "./flows/pay-flow.ts";
 import { handleStatusInstruction } from "./flows/status-flow.ts";
 import { handleWorkspaceInit } from "./flows/workspace-flow.ts";
@@ -53,6 +53,32 @@ function userFromContext(ctx: Context): TelegramUser | null {
   };
 }
 
+/**
+ * Safe diagnostic for addressed command parsing in production. Logs ONLY the
+ * first command token (never arguments, wallets, amounts, payment ids, tokens,
+ * or user data) under the `telegram_command_parse_debug` tag.
+ */
+function logCommandParseDebug(
+  text: string,
+  botUsername: string | null,
+  usernameSource: "config" | "ctx.me" | "default",
+): void {
+  if (!text.startsWith("/")) return;
+  const rawFirstToken = text.split(/\s+/)[0];
+  const normalized = normalizeAddressedCommand(text, botUsername);
+  const normalizedFirstToken =
+    normalized.rejected ? null : normalized.text.split(/\s+/)[0] ?? null;
+  console.log(
+    `telegram_command_parse_debug ${JSON.stringify({
+      rawFirstToken,
+      normalizedFirstToken,
+      addressedSuffixStripped: !normalized.rejected && normalizedFirstToken !== rawFirstToken,
+      rejected: normalized.rejected,
+      botUsernameSource: usernameSource,
+    })}`,
+  );
+}
+
 export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
   const bot = new Bot(token);
   const config = getTelegramConfig();
@@ -81,12 +107,20 @@ export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
     const user = userFromContext(ctx);
     if (!user) return;
     const text = ctx.message?.text ?? "";
-    // Deterministic in production: prefer the configured username, then the
-    // cached getMe value, and finally the documented default. Relying on
-    // ctx.me alone makes addressed commands (/pay@SolvoAgentBot) fail
-    // whenever getMe has not run for this serverless worker.
+    // Precedence: the runtime getMe value (ctx.me) is authoritative — the
+    // webhook path always has it (grammY's handleUpdate throws otherwise) —
+    // then an explicit TELEGRAM_BOT_USERNAME override, then the documented
+    // default. A stale or mistyped env value must never override what
+    // Telegram itself reports the bot to be.
+    const usernameSource: "config" | "ctx.me" | "default" =
+      (ctx.me?.username as string | undefined) !== undefined
+        ? "ctx.me"
+        : config.botUsername !== null
+          ? "config"
+          : "default";
     const botUsername =
-      config.botUsername ?? (ctx.me?.username as string | undefined) ?? DEFAULT_BOT_USERNAME;
+      (ctx.me?.username as string | undefined) ?? config.botUsername ?? DEFAULT_BOT_USERNAME;
+    logCommandParseDebug(text, botUsername, usernameSource);
     const parsed = parseInstruction(text, { botUsername });
 
     if (isGroupChat(user.chatType)) {

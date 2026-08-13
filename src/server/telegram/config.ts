@@ -17,7 +17,9 @@ export type TelegramConfig = {
 export function getTelegramConfig(): TelegramConfig {
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || null;
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
-  const botUsername = process.env.TELEGRAM_BOT_USERNAME?.trim() || null;
+  // Normalize: optional leading "@" and surrounding whitespace are tolerated
+  // so a mistyped value cannot silently break addressed command parsing.
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "") || null;
   const rawIds = (process.env.TELEGRAM_ALLOWED_DEV_USER_IDS ?? "").split(",");
   const allowedDevUserIds = new Set<string>();
   for (const raw of rawIds) {
