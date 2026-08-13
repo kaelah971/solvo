@@ -299,7 +299,16 @@ describe("M12.11 dashboard security gate — source contracts", () => {
   it("8. the auth routes never render markup, log tokens, or keep cookies", () => {
     for (const file of AUTH_ROUTES) {
       const source = readFileSync(file, "utf8");
-      assert.equal(source.includes("console."), false, `${file} logs anything`);
+      // The only permitted console output is the safe boolean diagnostic
+      // tag; anything else (tokens, cookies, raw errors) is forbidden.
+      const otherLogs = source
+        .split("\n")
+        .filter((line) => line.includes("console.") && !line.includes("console.log(`dashboard_auth_link_debug"));
+      assert.equal(otherLogs.length, 0, `${file} logs outside the diagnostic tag`);
+      assert.equal(source.includes("console.error"), false, `${file} logs errors`);
+      if (file.endsWith("telegram-link/route.ts")) {
+        assert.match(source, /console\.log\(`dashboard_auth_link_debug/, `${file} misses the auth diagnostic tag`);
+      }
       assert.equal(/<[a-zA-Z]/.test(source.replace(/Promise</g, "")), false, `${file} renders markup`);
       assert.equal(source.includes("workspaceId"), false, `${file} leaks workspace ids`);
       assert.equal(source.includes("telegramUserId"), false, `${file} leaks telegram ids`);
@@ -308,9 +317,13 @@ describe("M12.11 dashboard security gate — source contracts", () => {
     assert.match(logout, /maxAge: 0/, "logout must clear the session cookie");
   });
 
-  it("9-11, 14. the Telegram /dashboard flow is identity-only and never logs", () => {
+  it("9-11, 14. the Telegram /dashboard flow is identity-only and only logs safe booleans", () => {
     const flow = readFileSync("src/server/telegram/flows/dashboard-flow.ts", "utf8");
-    assert.equal(flow.includes("console."), false, "flow logs anything");
+    const otherLogs = flow
+      .split("\n")
+      .filter((line) => line.includes("console.") && !line.includes("console.log(`dashboard_login_link_debug"));
+    assert.equal(otherLogs.length, 0, "flow logs outside the diagnostic tag");
+    assert.match(flow, /console\.log\(`dashboard_login_link_debug/, "flow misses the login-link diagnostic tag");
     for (const word of ["execution", "keeperhub", "approve", "payout", "payment"]) {
       assert.equal(flow.includes(word), false, `flow references ${word}`);
     }

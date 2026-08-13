@@ -80,7 +80,9 @@ describe("dashboard session seam", () => {
     );
     assert.equal(cookie.name, DASHBOARD_SESSION_COOKIE);
     assert.equal(cookie.attributes.httpOnly, true);
-    assert.equal(cookie.attributes.sameSite, "strict");
+    // Lax (not Strict): Telegram in-app/external browser handoff performs a
+    // cross-site-style top-level navigation; Lax still blocks CSRF.
+    assert.equal(cookie.attributes.sameSite, "lax");
     assert.equal(cookie.attributes.secure, true);
     assert.equal(cookie.attributes.path, "/");
     assert.equal(cookie.attributes.maxAge, DASHBOARD_SESSION_MAX_AGE_SECONDS);

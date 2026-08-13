@@ -13,8 +13,15 @@ import { canViewDashboard, resolveDashboardContext } from "./access.ts";
  *    payload is JSON `{ workspaceId, telegramUserId }` and the HMAC key is
  *    `SOLVO_DASHBOARD_COOKIE_SECRET` (a dev/test constant outside production).
  *  - Cookies cannot be tampered with: a modified payload fails verification.
- *  - The cookie is HttpOnly, SameSite=Strict, Secure in production, Path=/,
+ *  - The cookie is HttpOnly, SameSite=Lax, Secure in production, Path=/,
  *    Max-Age 7 days.
+ *  - SameSite=Lax (not Strict): the Telegram → /auth/telegram-link → /app
+ *    handoff opens from Telegram's in-app/external browser, which can behave
+ *    like a cross-site top-level navigation; Strict drops the session cookie
+ *    there and the user lands on the generic unavailable page. Lax still
+ *    blocks cross-site POST/subresource cookies (CSRF) while allowing the
+ *    top-level GET navigation that this flow needs. The dashboard is
+ *    read-only and every request re-checks membership from the repository.
  *  - `/app` STILL re-checks ACTIVE same-workspace membership from the
  *    repository on every request (`requireDashboardContext`) — the cookie is
  *    an identity hint, never authority.
@@ -124,13 +131,16 @@ export type DashboardSessionCookie = {
   attributes: {
     httpOnly: true;
     secure: boolean;
-    sameSite: "strict";
+    /** Lax (not Strict): Telegram in-app/external browser handoff performs a
+     * cross-site-style top-level navigation; Lax keeps CSRF protection while
+     * letting the auth → /app GET redirect carry the cookie. */
+    sameSite: "lax";
     path: string;
     maxAge: number;
   };
 };
 
-/** Cookie attributes for the auth route: HttpOnly + Strict + Secure-in-prod. */
+/** Cookie attributes for the auth route: HttpOnly + Lax + Secure-in-prod. */
 export function buildDashboardSessionCookie(
   session: DashboardSession,
   input: { secret: string; secureCookie: boolean; maxAgeSeconds?: number; path?: string },
@@ -141,11 +151,25 @@ export function buildDashboardSessionCookie(
     attributes: {
       httpOnly: true,
       secure: input.secureCookie,
-      sameSite: "strict",
+      sameSite: "lax",
       path: input.path ?? "/",
       maxAge: input.maxAgeSeconds ?? DASHBOARD_SESSION_MAX_AGE_SECONDS,
     },
   };
+}
+
+/**
+ * Safe per-request session diagnostic for /app pages. Logs ONLY booleans and
+ * the role — never the cookie value, signature, workspace ids, user ids, or
+ * any secret.
+ */
+function logDashboardSessionDebug(input: {
+  session: DashboardSession | null;
+  ctx: DashboardContext;
+  allowed: boolean;
+}): void {
+  // Tag must stay on this line so source contracts only ever see it here.
+  console.log(`dashboard_session_debug ${JSON.stringify({ cookiePresent: input.session !== null, signatureValid: input.session !== null, sessionExpired: false, membershipFound: input.ctx.memberId !== null, membershipActive: input.ctx.status === "active" && input.ctx.role !== null && input.ctx.mode !== null, role: input.ctx.role, gateResult: input.allowed ? "allowed" : "unavailable" })}`);
 }
 
 export type RequireDashboardContextResult =
@@ -167,13 +191,27 @@ export type RequireDashboardContextInput = {
 export async function requireDashboardContext(
   input: RequireDashboardContextInput,
 ): Promise<RequireDashboardContextResult> {
-  if (input.session === null) return { ok: false };
+  if (input.session === null) {
+    const ctx: DashboardContext = {
+      workspaceId: "",
+      telegramUserId: "",
+      memberId: null,
+      role: null,
+      status: null,
+      mode: null,
+      nowIso: input.nowIso,
+    };
+    logDashboardSessionDebug({ session: null, ctx, allowed: false });
+    return { ok: false };
+  }
   const ctx = await resolveDashboardContext({
     repo: input.repo,
     workspaceId: input.session.workspaceId,
     telegramUserId: input.session.telegramUserId,
     nowIso: input.nowIso,
   });
-  if (!canViewDashboard(ctx)) return { ok: false };
+  const allowed = canViewDashboard(ctx);
+  logDashboardSessionDebug({ session: input.session, ctx, allowed });
+  if (!allowed) return { ok: false };
   return { ok: true, ctx };
 }

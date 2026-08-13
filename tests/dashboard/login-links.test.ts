@@ -182,7 +182,7 @@ describe("issueDashboardSessionFromLoginToken", () => {
     assert.equal(session.redirectTo, "/app");
     assert.equal(session.cookie.name, "solvo_dash_session");
     assert.equal(session.cookie.attributes.httpOnly, true);
-    assert.equal(session.cookie.attributes.sameSite, "strict");
+    assert.equal(session.cookie.attributes.sameSite, "lax");
     assert.equal(session.cookie.attributes.secure, true);
     assert.equal(session.cookie.attributes.maxAge, 7 * 24 * 60 * 60);
     // The token is consumed exactly once.

@@ -338,7 +338,14 @@ Required environment:
 - `SOLVO_DASHBOARD_COOKIE_SECRET` — required in production for dashboard
   sessions; without it production refuses all dashboard cookies.
 - `NEXT_PUBLIC_APP_URL` — the deployed app URL, e.g.
-  `https://solvo-beryl.vercel.app`.
+  `https://solvo-beryl.vercel.app`. Used to build the /dashboard login link
+  and must match the deployed origin (never `localhost` in production).
+- The dashboard session cookie is `solvo_dash_session`, signed (HMAC-SHA256),
+  HttpOnly, Secure in production, Path=/, 7-day Max-Age, **SameSite=Lax** —
+  Lax (not Strict) so the Telegram → /auth/telegram-link → /app in-app /
+  external browser handoff (a cross-site-style top-level GET) still carries
+  the cookie; CSRF protection is preserved and every request re-checks
+  ACTIVE workspace membership from the repository.
 
 Telegram wiring:
 

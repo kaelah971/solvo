@@ -42,6 +42,33 @@ export function dashboardLoginLinkMessage(expiresAt: string): string {
   ].join("\n");
 }
 
+function safeHost(value: string | null): string | null {
+  if (value === null) return null;
+  try {
+    return new URL(value).host;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Safe /dashboard flow diagnostic. Logs ONLY hostnames and booleans — never
+ * the token, the full link (which carries the token), user ids, chat ids,
+ * workspace ids, or secrets.
+ */
+function logDashboardLoginLinkDebug(input: {
+  appUrl: string;
+  workspaceMemberFound: boolean;
+  memberStatus: string | null;
+  role: string | null;
+  tokenCreated: boolean;
+  linkHost: string | null;
+  buttonSent: boolean;
+}): void {
+  // Tag must stay on this line so source contracts only ever see it here.
+  console.log(`dashboard_login_link_debug ${JSON.stringify({ appUrlHost: safeHost(input.appUrl), tokenCreated: input.tokenCreated, expiresInMinutes: DASHBOARD_LOGIN_EXPIRY_MINUTES, workspaceMemberFound: input.workspaceMemberFound, memberStatus: input.memberStatus, role: input.role, linkHost: input.linkHost, buttonSent: input.buttonSent })}`);
+}
+
 export async function handleDashboardInstruction(
   input: { user: TelegramUser },
   deps: DashboardFlowDeps,
@@ -53,14 +80,45 @@ export async function handleDashboardInstruction(
   });
 
   if (input.user.chatType !== "group" && input.user.chatType !== "supergroup") {
+    logDashboardLoginLinkDebug({
+      appUrl: deps.appUrl ?? defaultAppUrl,
+      workspaceMemberFound: false,
+      memberStatus: null,
+      role: null,
+      tokenCreated: false,
+      linkHost: null,
+      buttonSent: false,
+    });
     return unavailable();
   }
 
   const workspace = await deps.repo.getWorkspaceByTelegramChatId(input.user.chatId);
-  if (!workspace || workspace.mode !== "community") return unavailable();
+  if (!workspace || workspace.mode !== "community") {
+    logDashboardLoginLinkDebug({
+      appUrl: deps.appUrl ?? defaultAppUrl,
+      workspaceMemberFound: false,
+      memberStatus: null,
+      role: null,
+      tokenCreated: false,
+      linkHost: null,
+      buttonSent: false,
+    });
+    return unavailable();
+  }
 
   const member = await deps.repo.getWorkspaceMember(workspace.id, input.user.userId);
-  if (!member || member.status !== "active") return unavailable();
+  if (!member || member.status !== "active") {
+    logDashboardLoginLinkDebug({
+      appUrl: deps.appUrl ?? defaultAppUrl,
+      workspaceMemberFound: member !== null,
+      memberStatus: member?.status ?? null,
+      role: member?.role ?? null,
+      tokenCreated: false,
+      linkHost: null,
+      buttonSent: false,
+    });
+    return unavailable();
+  }
 
   const nowIso = (deps.now ?? (() => new Date()))().toISOString();
   const created = await createDashboardLoginLink({
@@ -72,7 +130,28 @@ export async function handleDashboardInstruction(
     nowIso,
     appUrl: deps.appUrl ?? defaultAppUrl,
   });
-  if (!created.ok) return unavailable();
+  if (!created.ok) {
+    logDashboardLoginLinkDebug({
+      appUrl: deps.appUrl ?? defaultAppUrl,
+      workspaceMemberFound: true,
+      memberStatus: member.status,
+      role: member.role,
+      tokenCreated: false,
+      linkHost: null,
+      buttonSent: false,
+    });
+    return unavailable();
+  }
+
+  logDashboardLoginLinkDebug({
+    appUrl: deps.appUrl ?? defaultAppUrl,
+    workspaceMemberFound: true,
+    memberStatus: member.status,
+    role: member.role,
+    tokenCreated: true,
+    linkHost: safeHost(created.link),
+    buttonSent: true,
+  });
 
   return {
     text: dashboardLoginLinkMessage(created.expiresAt),

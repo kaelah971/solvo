@@ -12,6 +12,7 @@ import { describe, it } from "node:test";
 const LOGIN_SOURCE_FILES = [
   "src/server/dashboard/login-links.ts",
   "src/server/dashboard/session.ts",
+  "src/server/dashboard/auth-exchange.ts",
   "src/app/auth/telegram-link/route.ts",
   "src/app/auth/logout/route.ts",
   "src/server/telegram/flows/dashboard-flow.ts",
@@ -37,10 +38,33 @@ const FORBIDDEN_IMPORT_PATTERNS = [
   "fetch(",
 ];
 
+/**
+ * The ONLY permitted console output across the login bridge is the safe
+ * boolean diagnostic tag in each file; everything else is forbidden.
+ */
+const ALLOWED_DIAGNOSTIC_TAGS = [
+  { file: "src/server/dashboard/session.ts", tag: "dashboard_session_debug" },
+  { file: "src/server/dashboard/auth-exchange.ts", tag: "dashboard_auth_link_debug" },
+  { file: "src/app/auth/telegram-link/route.ts", tag: "dashboard_auth_link_debug" },
+  { file: "src/server/telegram/flows/dashboard-flow.ts", tag: "dashboard_login_link_debug" },
+];
+
+function assertOnlyDiagnosticLogs(file: string, source: string): void {
+  const allowed = ALLOWED_DIAGNOSTIC_TAGS.find((entry) => entry.file === file);
+  const otherLogs = source
+    .split("\n")
+    .filter((line) => line.includes("console.") && !(allowed !== undefined && line.includes(`console.log(\`${allowed.tag}`)));
+  assert.equal(otherLogs.length, 0, `${file} logs outside its diagnostic tag`);
+  if (allowed !== undefined) {
+    assert.match(source, new RegExp(`console\\.log\\(\`${allowed.tag}`), `${file} misses the diagnostic tag`);
+  }
+}
+
 describe("M12.4 login bridge source contract", () => {
   it("login/session modules import no KeeperHub/MCP/execution writer/model provider", () => {
     for (const file of LOGIN_SOURCE_FILES) {
       const source = readFileSync(file, "utf8");
+      assertOnlyDiagnosticLogs(file, source);
       const importLines = source
         .split("\n")
         .filter((line) => /^\s*(import|export).*?(from|import\()/.test(line));
@@ -59,7 +83,6 @@ describe("M12.4 login bridge source contract", () => {
     assert.equal(flow.includes("approve"), false, "flow references approvals");
     assert.equal(flow.includes("payout"), false, "flow references payouts");
     assert.equal(flow.includes("payment"), false, "flow references payments");
-    assert.equal(flow.includes("console."), false, "flow logs anything");
   });
 
   it("no raw login token is ever stored or logged by the bridge", () => {
@@ -78,7 +101,7 @@ describe("M12.4 login bridge source contract", () => {
     assert.equal(session.includes("useSearchParams"), false);
     assert.match(session, /timingSafeEqual/);
     assert.match(session, /httpOnly: true/);
-    assert.match(session, /sameSite: "strict"/);
+    assert.match(session, /sameSite: "lax"/);
   });
 
   it("the auth route never renders or echoes the token", () => {
@@ -90,7 +113,6 @@ describe("M12.4 login bridge source contract", () => {
     // Invalid paths redirect to /app (the generic unavailable screen).
     assert.match(route, /unavailableRedirect/);
     assert.match(route, /searchParams\.get\("token"\)/);
-    assert.equal(route.includes("console."), false, "route logs the token");
   });
 
   it("the migration stores only the token hash", () => {

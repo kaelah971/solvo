@@ -124,9 +124,14 @@ describe("/dashboard Telegram flow", () => {
     assert.ok(!repo.auditEvents.some((event) => event.event_type.startsWith("execution_")));
   });
 
-  it("the raw token is never logged by the flow (no console output paths)", () => {
+  it("the raw token is never logged by the flow (only the safe boolean diagnostic tag)", () => {
     const source = readFileSync("src/server/telegram/flows/dashboard-flow.ts", "utf8");
-    assert.equal(source.includes("console.log"), false);
+    // The ONLY console output is the single safe diagnostic tag; it logs
+    // hostnames and booleans, never the token, link, or any identifier.
+    const otherLogs = source
+      .split("\n")
+      .filter((line) => line.includes("console.") && !line.includes("console.log(`dashboard_login_link_debug"));
+    assert.equal(otherLogs.length, 0, "flow logs outside the diagnostic tag");
     assert.equal(source.includes("console.error"), false);
   });
 
