@@ -59,6 +59,7 @@ No secrets appear in this repository.
   visibility; reissue service — reissue creates a NEW claim row + new token,
   the old claim is never resurrected; no-leak same-workspace/member gate;
   pipeline-only proof; adversarial/truthfulness hardening)
+- M12 web admin dashboard (read-only operator console — shipped scope below)
 
 **M8 S3 shipped scope (exactly what is implemented and tested):**
 
@@ -131,6 +132,67 @@ No secrets appear in this repository.
   links, auto-approval, direct execution from claim entry, raw-token
   re-display, or claim destination editing — all remain declined or deferred
 
+**M12 shipped scope (exactly what is implemented and tested):**
+
+Design/spec: `docs/m12-web-admin-dashboard-design.md`; claim-link behavior
+reuses the M11 contract (`docs/m11-smarter-claim-links-design.md`).
+
+- personalized Telegram `/dashboard` login (one-time 10-minute login links,
+  hash-only persisted tokens, single use)
+- signed `solvo_dash_session` cookie (HMAC-SHA256, HttpOnly,
+  SameSite=Strict, Secure in production, 7-day TTL)
+- workspace membership re-check from the repository on every request —
+  removed/inactive members lose access even with a valid cookie
+- `/app` overview (pending approvals, claim links, prepared vs completed
+  totals, failed/unknown, active members, recent audit events + agent
+  requests — never any number from `agent_runs`)
+- `/app/approvals` (read-only decision queue: pending payouts, pending batch
+  payouts, claimed claim links; role capability copy + separation-of-duty
+  warnings)
+- `/app/payouts` and `/app/payouts/[id]`
+- `/app/batches` and `/app/batches/[id]`
+- `/app/claims` and `/app/claims/[id]`
+- `/app/recipients` (full wallets owner/approver-only, masked for members)
+- `/app/members` (masked identities, role/status badges)
+- `/app/policies` (mode, limits, approval requirement, spent/remaining today,
+  judge/sandbox notes — read-only)
+- `/app/agent-runs` and `/app/agent-runs/[id]` (observability only)
+- `/app/audit` (safe whitelisted event timeline)
+- read-only operator dashboard end to end — no page can approve, reject,
+  execute, retry, reissue, add, edit, or delete
+- pipeline-only proof — completed labels and tx hashes appear only from the
+  payout pipeline; completed-without-hash and not-confirmed never show proof
+- no raw claim token redisplay — no token, token hash, or token prefix ever
+  appears in any dashboard page or model
+- no cross-workspace leaks — generic unavailable/not-found screens for every
+  denied shape; unknown and foreign ids collapse to identical output
+- no web execution/action bypass — dashboard imports no KeeperHub/MCP/
+  execution/Telegram-webhook/model-provider surface (source-contract tested)
+
+**M12 explicitly does NOT ship:**
+
+- web approve/reject actions
+- web claim reissue action
+- recipient add/edit/delete
+- member add/remove/role change
+- policy limit edits
+- CSV/bulk imports
+- claim-link batches
+- retry/recovery console
+- KeeperHub workflow companion
+- x402/paid reports
+- raw SQL/query builder
+- direct KeeperHub execution from the web
+
+**M12 deployment notes:**
+
+- Migration `0014_dashboard_login_tokens.sql` must be applied before live
+  `/dashboard` login-token creation (`npm run db:migrate`).
+- Migration `0013_claim_reissue.sql` must be applied before live claim
+  reissue audit recording.
+- `SOLVO_DASHBOARD_COOKIE_SECRET` is required in production for dashboard
+  sessions; without it, production refuses all dashboard cookies.
+
 ### In progress
 
 - M8 final integration/review (S3 slice gate complete)
@@ -139,7 +201,6 @@ No secrets appear in this repository.
 
 ### Next
 
-- M12 web admin dashboard
 - M13 retry/recovery console
 - M14 KeeperHub workflow companion
 - M15 x402/paid workflow surface

@@ -2,16 +2,76 @@
 
 Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
-Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
-login bridge + M12.5 payout/batch pages + M12.6 claim pages + M12.7
-recipients/members pages + M12.8 policies page + M12.9 agent-runs/audit
-pages + M12.10 approvals page (read-only) + M12.11 security/truthfulness
-gate implemented.** The operator console is specified; read models, the
-`/app` overview, the Telegram → web login flow, the payout/batch pages, the
-claim pages, the directory pages, the policies page, the observability
-pages, and the read-only approvals queue ship, and the adversarial gate
-passes. No admin actions exist yet, and no migrations were applied. M12 is
-NOT marked shipped — the docs/roadmap final gate is M12.12.
+Status: **COMPLETE / SHIPPED (read-only).** M12.1 design + M12.2 read models
++ M12.3 overview shell + M12.4 login bridge + M12.5 payout/batch pages +
+M12.6 claim pages + M12.7 recipients/members pages + M12.8 policies page +
+M12.9 agent-runs/audit pages + M12.10 approvals page (read-only) + M12.11
+security/truthfulness gate + M12.12 docs/roadmap final gate all landed on
+`feature/web-admin-dashboard`. The dashboard is intentionally READ-ONLY:
+no web action wiring exists. No migrations were applied by any M12 gate,
+and no payments were executed.
+
+## M12.12 final gate (COMPLETE / SHIPPED)
+
+The final docs/roadmap gate (after M12.11):
+
+- **Final shipped scope**: the read-only operator console — personalized
+  Telegram `/dashboard` login, signed `solvo_dash_session` cookie, per-request
+  ACTIVE same-workspace membership re-check, and the `/app` overview,
+  approvals queue, payouts (+detail), batches (+detail), claims (+detail),
+  recipients, members, policies, agent-runs (+detail), and audit pages. Every
+  page is server-rendered, workspace-scoped, no-leak, and pipeline-only-proof.
+- **Final deferred scope (explicitly NOT shipped)**: web approve/reject
+  actions; web claim reissue action (feature-flagged behind migration 0013);
+  recipient add/edit/delete; member add/remove/role change; policy limit
+  edits; CSV/bulk imports; claim-link batches; retry/recovery console;
+  KeeperHub workflow companion; x402/paid reports; raw SQL/query builder;
+  direct KeeperHub execution from the web. A future action-wiring slice
+  (M12.10b) must route every action through the existing application
+  services with role gates, policy re-checks, and separation-of-duty
+  enforcement server-side, and must land with its own role/no-leak/
+  truthfulness tests.
+- **Route map** (all behind the session gate): `/app`, `/app/approvals`,
+  `/app/payouts`, `/app/payouts/[id]`, `/app/batches`, `/app/batches/[id]`,
+  `/app/claims`, `/app/claims/[id]`, `/app/recipients`, `/app/members`,
+  `/app/policies`, `/app/agent-runs`, `/app/agent-runs/[id]`, `/app/audit`,
+  plus `/auth/telegram-link` (token exchange → signed cookie) and
+  `/auth/logout` (cookie clear). The shell nav links only implemented
+  sections; `/app/settings` remains unbuilt.
+- **Auth/session summary**: `/dashboard` issues a 10-minute, single-use,
+  hash-only login token; `/auth/telegram-link` re-checks ACTIVE membership,
+  consumes the token once, and sets the HMAC-signed cookie; every `/app`
+  request re-resolves the member row from the repository — removed/inactive
+  members and foreign-workspace cookies all collapse to one generic
+  unavailable screen.
+- **Security/truthfulness guarantees**: no execution/action bypass
+  (forbidden-surface source scans + behavioral sweeps in the M12.11 gate),
+  no cross-workspace data, no existence leaks (identical generic outputs for
+  unknown vs foreign ids), no raw claim token/hash/prefix anywhere, masked
+  wallets, pipeline-only proof (completed labels + tx hashes only from
+  completed pipeline items carrying a hash), agent runs and audit events are
+  never payment truth, overview totals never derive from `agent_runs`,
+  prepared ≠ paid copy throughout, no admin controls/forms/server actions on
+  any page.
+- **Migration/env notes**: migration `0014_dashboard_login_tokens.sql` must
+  be applied before live `/dashboard` token creation; migration
+  `0013_claim_reissue.sql` must be applied before live reissue audit
+  recording; `SOLVO_DASHBOARD_COOKIE_SECRET` is REQUIRED in production
+  (production without it refuses all dashboard cookies). **Neither migration
+  was applied by any M12 gate.**
+- **Final validation results**: scoped-safe validation passed —
+  `node --test tests/dashboard/*.test.ts` (273 pass, 0 fail),
+  `tests/security/claim-link-truthfulness.test.ts` +
+  `agent-truthfulness.test.ts` + `agent-execution-boundary.test.ts`
+  (53 pass, 0 fail), `npm run lint` (0 errors; only pre-existing warnings in
+  the unrelated landing-page workstream's `tests/ui/landing-source.test.ts`),
+  `npx tsc --noEmit` (clean), `npm run build` (green; all dashboard routes in
+  the route table). The full `npm test` suite was intentionally NOT run
+  because unrelated landing-page WIP in the same working tree is known to
+  fail `tests/ui/*`; those files are untouched and unstaged. No live model
+  calls, no payments, no DB/Telegram/webhook/payment scripts were run; the
+  read-only `telegram:doctor`/`judge:doctor` probes report configuration
+  readiness without executing anything.
 
 ## M12.11 security/truthfulness gate (implemented)
 
