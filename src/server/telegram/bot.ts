@@ -2,7 +2,7 @@ import { Bot, Context, InlineKeyboard } from "grammy";
 
 import { PostgresRepository } from "../db/postgres-repository.ts";
 import * as accessor from "../db/accessor.ts";
-import { getTelegramConfig } from "./config.ts";
+import { getTelegramConfig, DEFAULT_BOT_USERNAME } from "./config.ts";
 import { parseInstruction } from "./parsing.ts";
 import { handlePayInstruction, resolveMode } from "./flows/pay-flow.ts";
 import { handleStatusInstruction } from "./flows/status-flow.ts";
@@ -81,7 +81,12 @@ export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
     const user = userFromContext(ctx);
     if (!user) return;
     const text = ctx.message?.text ?? "";
-    const botUsername = (ctx.me?.username as string | undefined) ?? null;
+    // Deterministic in production: prefer the configured username, then the
+    // cached getMe value, and finally the documented default. Relying on
+    // ctx.me alone makes addressed commands (/pay@SolvoAgentBot) fail
+    // whenever getMe has not run for this serverless worker.
+    const botUsername =
+      config.botUsername ?? (ctx.me?.username as string | undefined) ?? DEFAULT_BOT_USERNAME;
     const parsed = parseInstruction(text, { botUsername });
 
     if (isGroupChat(user.chatType)) {

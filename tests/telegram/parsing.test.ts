@@ -411,3 +411,72 @@ describe("claimpay parsing (M7)", () => {
     assert.equal(result.kind, "failure");
   });
 });
+
+describe("addressed commands (production parity)", () => {
+  const opts = { botUsername: "SolvoAgentBot" };
+
+  it("parses /pay@SolvoAgentBot <alias> <amount> USDC as pay_alias", () => {
+    const result = parseInstruction("/pay@SolvoAgentBot blossom 0.01 USDC", opts);
+    assert.equal(result.kind, "pay_alias");
+    if (result.kind === "pay_alias") {
+      assert.equal(result.alias, "blossom");
+      assert.equal(result.amount, "0.01");
+      assert.equal(result.token, "USDC");
+      assert.equal(result.sourceType, "telegram_command");
+    }
+  });
+
+  it("matches the bot username case-insensitively", () => {
+    for (const cmd of [
+      "/pay@solvoagentbot blossom 0.01 USDC",
+      "/pay@SOLVOAGENTBOT blossom 0.01 USDC",
+      "/pay@SoLvOaGeNtBoT blossom 0.01 USDC",
+    ]) {
+      const result = parseInstruction(cmd, opts);
+      assert.equal(result.kind, "pay_alias", `expected pay_alias for: ${cmd}`);
+      if (result.kind === "pay_alias") assert.equal(result.alias, "blossom");
+    }
+  });
+
+  it("parses /pay@SolvoAgentBot <address> <amount> USDC as a wallet payout", () => {
+    const result = parseInstruction(`/pay@SolvoAgentBot ${ADDRESS} 0.01 USDC`, opts);
+    assert.equal(result.kind, "pay");
+    if (result.kind === "pay") {
+      assert.equal(result.address, ADDRESS);
+      assert.equal(result.amount, "0.01");
+      assert.equal(result.token, "USDC");
+      assert.equal(result.sourceType, "telegram_command");
+    }
+  });
+
+  it("parses every remaining addressed command like its plain form", () => {
+    const pairs: Array<[string, string]> = [
+      ["/dashboard", "/dashboard@SolvoAgentBot"],
+      ["/workspace init", "/workspace@SolvoAgentBot init"],
+      ["/member list", "/member@SolvoAgentBot list"],
+      ["/recipient list", "/recipient@SolvoAgentBot list"],
+      ["/claimpay 0.05 USDC", "/claimpay@SolvoAgentBot 0.05 USDC"],
+      ["/claimstatus some-claim-id", "/claimstatus@SolvoAgentBot some-claim-id"],
+      [`/judgepay ${ADDRESS} 0.01 USDC`, `/judgepay@SolvoAgentBot ${ADDRESS} 0.01 USDC`],
+    ];
+    for (const [plain, addressed] of pairs) {
+      assert.deepEqual(parseInstruction(addressed, opts), parseInstruction(plain), `differs: ${addressed}`);
+    }
+  });
+
+  it("keeps the plain /pay alias form working unchanged", () => {
+    const result = parseInstruction("/pay blossom 0.01 USDC");
+    assert.equal(result.kind, "pay_alias");
+  });
+
+  it("still rejects malformed unrelated commands", () => {
+    const result = parseInstruction("/do-the-thing@SolvoAgentBot now");
+    assert.equal(result.kind, "failure");
+    if (result.kind === "failure") {
+      assert.equal(result.reason, "Unknown command.");
+      assert.match(result.hint, /Supported commands/);
+    }
+    const addressed = parseInstruction("/do-the-thing@SolvoAgentBot now", opts);
+    assert.equal(addressed.kind, "failure");
+  });
+});
