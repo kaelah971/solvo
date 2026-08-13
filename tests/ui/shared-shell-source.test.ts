@@ -53,6 +53,16 @@ test("dashboard menu has accessible disclosure and keyboard behavior", () => {
   assert.match(dashboardNav, /onClick=\{\(\) => setOpen\(false\)\}/);
 });
 
+test("dashboard mobile menu toggle label is MENU / CLOSE only", () => {
+  // Closed state renders MENU, open state renders CLOSE.
+  assert.match(dashboardNav, /\{open \? "Close" : "Menu"\}/);
+  // The old "Sections" prefix must no longer render next to the state label.
+  assert.doesNotMatch(dashboardNav, />\s*Sections\s*</);
+  for (const legacy of ["SectionsMenu", "SectionsClose", "Sections Menu", "Sections Close"]) {
+    assert.equal(dashboardNav.includes(legacy), false, `legacy toggle label "${legacy}" still present`);
+  }
+});
+
 test("dashboard active state covers exact and nested routes and is not color-only", () => {
   assert.match(dashboardNav, /pathname === href \|\| pathname\.startsWith\(`\$\{href\}\/`\)/);
   assert.match(dashboardNav, /aria-current=\{active \? "page" : undefined\}/);

@@ -38,8 +38,7 @@ export function DashboardNav({ sections }: { sections: readonly DashboardSection
         onClick={() => setOpen((value) => !value)}
         className="mx-3 mb-3 inline-flex min-h-11 items-center justify-between rounded-lg border border-white/[0.08] px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary md:hidden"
       >
-        Sections
-        <span aria-hidden="true">{open ? "Close" : "Menu"}</span>
+        {open ? "Close" : "Menu"}
       </button>
     <nav
       id="dashboard-sections"
