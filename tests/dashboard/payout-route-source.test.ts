@@ -140,6 +140,7 @@ describe("payout/batch route source contract", () => {
   it("dashboard shell navigation links only implemented sections", () => {
     const layout = readFileSync("src/app/app/layout.tsx", "utf8");
     assert.match(layout, /href: "\/app"/);
+    assert.match(layout, /href: "\/app\/approvals"/);
     assert.match(layout, /href: "\/app\/payouts"/);
     assert.match(layout, /href: "\/app\/batches"/);
     assert.match(layout, /href: "\/app\/claims"/);
@@ -149,7 +150,7 @@ describe("payout/batch route source contract", () => {
     assert.match(layout, /href: "\/app\/agent-runs"/);
     assert.match(layout, /href: "\/app\/audit"/);
     // Unimplemented sections must not be linked.
-    for (const missing of ["approvals", "settings"]) {
+    for (const missing of ["settings"]) {
       assert.equal(layout.includes(`"${missing}"`), false, `layout links to unimplemented section /${missing}`);
     }
   });

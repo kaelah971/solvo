@@ -5,10 +5,81 @@ Branch: `feature/web-admin-dashboard`
 Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
 login bridge + M12.5 payout/batch pages + M12.6 claim pages + M12.7
 recipients/members pages + M12.8 policies page + M12.9 agent-runs/audit
-pages implemented.** The operator console is specified; read models, the
-`/app` overview, the Telegram → web login flow, the payout/batch pages, the
-claim pages, the directory pages, the policies page, and the observability
-pages ship. No admin actions exist yet, and no migrations were applied.
+pages + M12.10 approvals page (read-only) implemented.** The operator
+console is specified; read models, the `/app` overview, the Telegram → web
+login flow, the payout/batch pages, the claim pages, the directory pages,
+the policies page, the observability pages, and the read-only approvals
+queue ship. No admin actions exist yet, and no migrations were applied.
+
+## M12.10 approvals page (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.9):
+
+- **Route added**: `/app/approvals` — server-rendered (`force-dynamic`),
+  read-only decision queue, gated by the same M12.3/M12.4 session flow
+  (signed cookie → repo re-check of ACTIVE same-workspace membership →
+  gated page model). The dashboard shell nav now links Overview /
+  Approvals / Payouts / Batches / Claims / Recipients / Members / Policies /
+  Agent Runs / Audit (+ Sign out); only the settings section remains
+  unlinked.
+- **Read-only behavior**: no forms, buttons, server actions, or client
+  handlers. No approve/reject/execute/retry/reissue surface exists anywhere
+  on the page.
+- **Workspace/session gate**: no session, unknown workspace, non-member,
+  inactive member, and no-DB all render the single generic
+  `DashboardUnavailable` panel. All reads are workspace-scoped; no approval/
+  workspace/member existence leak.
+- **Pending payout queue**: payouts with pipeline state `pending_approval`
+  and non-batch sources — source label, requester label, total, item count,
+  created timestamp, separation-of-duty warning when the current operator
+  requested it, and a link to `/app/payouts/[id]`.
+- **Pending batch queue**: `pending_approval` payouts from batch sources
+  (`telegram_batch`/`batch_csv`) — requester, total, item count,
+  completed/pending/failed leg counts derived from the items' pipeline
+  states, created timestamp, SoD warning, and a link to
+  `/app/batches/[id]`.
+- **Claimed claim links waiting approval**: claims whose M11.2 EFFECTIVE
+  status is `claimed` — amount/currency/network, masked claimed wallet,
+  computed expiry, requester, linked payout reference when present, SoD
+  warning, and a link to `/app/claims/[id]`. Pending/unclaimed, computed
+  expired, approved/payment-prepared, completed (pipeline-proof), and
+  not-confirmed claims never enter the queue.
+- **Role capability copy**: OWNER/APPROVER — "You may approve eligible
+  requests later."; MEMBER — "Members can view this queue but cannot
+  approve." (no action controls for anyone). SoD copy: "Requesters cannot
+  approve their own payout." plus per-row warnings ("You requested this
+  payout. You cannot approve it." / "You requested this claim. You cannot
+  approve the claimed destination.").
+- **Truthful copy**: "This queue shows requests waiting for a human
+  decision." / "Approving does not execute funds by itself." / "KeeperHub
+  execution happens only after approval and the existing execution
+  pipeline." / "Nothing on this page approves, rejects, executes, or
+  reissues." Empty state: "No pending approvals."
+- **Page model** (`src/server/dashboard/approvals-page.ts`):
+  `buildApprovalsPageModel` reads the pending payouts, their items, claims,
+  and members ONCE per request and builds all three queues through the
+  existing M12.2 pure mappers (`buildPayoutListItemView`,
+  `buildPayoutItemView`, `buildClaimListItemView`, `payoutListSourceLabel`,
+  effective claim status via `getEffectiveClaimStatus`); `approvalCapability`
+  and `selfRequesterNote` are pure display helpers. `requesterIsSelf`
+  compares the raw requester id against the session identity — the raw id
+  itself never leaves the model.
+- **Tests** (+21): page-model tests for gating (owner/approver/member
+  render, nonmember/inactive identical unavailable), workspace scoping,
+  honest empty state, single-vs-batch separation with counts, completed/
+  cancelled/failed payouts never queued, claimed-only claim queue
+  (pending/expired/approved/executed-without-proof/pipeline-completed all
+  excluded), masked wallets, requester-is-self flags, role capability copy,
+  token/hash/prefix/provider-JSON absence in serialized output, JSON
+  serializability; route source-contract tests (forbidden imports, truthful
+  copy, role capability + SoD copy in the model, safe detail links, no
+  approve/reject/execute/retry/reissue controls or forms, banned terms,
+  secret markers, shell nav includes Approvals, every denied path renders
+  the shared unavailable panel). `tests/dashboard/payout-route-source.test
+  .ts` nav assertion updated: Approvals is now a linked section.
+- **No actions/execution**: nothing on the page approves, rejects, executes,
+  or reissues; no migrations were applied during the M12.10 gates (0013/
+  0014 remain unapplied).
 
 ## M12.9 agent-runs and audit pages (implemented)
 

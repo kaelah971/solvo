@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 
 const DASHBOARD_SECTIONS = [
   { href: "/app", label: "Overview" },
+  { href: "/app/approvals", label: "Approvals" },
   { href: "/app/payouts", label: "Payouts" },
   { href: "/app/batches", label: "Batches" },
   { href: "/app/claims", label: "Claims" },
@@ -25,7 +26,7 @@ const DASHBOARD_SECTIONS = [
 ];
 
 /**
- * M12.3/M12.9 — Operator dashboard shell.
+ * M12.3/M12.10 — Operator dashboard shell.
  *
  * Slim operator chrome: wordmark + section navigation (only implemented
  * pages are linked) + sign out. Authentication is handled per-page through
