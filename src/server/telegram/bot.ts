@@ -79,6 +79,64 @@ function logCommandParseDebug(
   );
 }
 
+/** The deterministic dispatch branch taken for a parsed instruction. */
+function dispatchBranchFor(kind: ParseResult["kind"]): string {
+  switch (kind) {
+    case "start":
+      return "start";
+    case "help":
+      return "help";
+    case "status":
+      return "status";
+    case "judge_pay":
+      return "judge_pay";
+    case "workspace_init":
+      return "group_workspace_init";
+    case "member_add":
+      return "group_member_add";
+    case "member_remove":
+      return "group_member_remove";
+    case "member_list":
+      return "group_member_list";
+    case "recipient_add":
+      return "group_recipient_add";
+    case "recipient_list":
+      return "group_recipient_list";
+    case "pay":
+      return "community_pay_wallet";
+    case "pay_alias":
+      return "community_pay_alias";
+    case "batch":
+      return "group_batch";
+    case "claim_pay":
+      return "group_claim_pay";
+    case "claim_status":
+      return "group_claim_status";
+    case "dashboard":
+      return "group_dashboard";
+    case "failure":
+      return "failure_reply";
+  }
+}
+
+/**
+ * Safe post-parse dispatch diagnostic. Logs ONLY the parsed kind, sourceType,
+ * and branch names — never arguments, wallets, text, ids, tokens, or secrets.
+ */
+function logInstructionDispatchDebug(parsed: ParseResult, handlerBranch: "group" | "private"): void {
+  const sourceType = "sourceType" in parsed ? parsed.sourceType : null;
+  console.log(
+    `telegram_instruction_dispatch_debug ${JSON.stringify({
+      parsedType: parsed.kind,
+      sourceType,
+      handlerBranch,
+      dispatchBranch: dispatchBranchFor(parsed.kind),
+      isUnknownCommand: parsed.kind === "failure" && parsed.reason === "Unknown command.",
+      resultKind: parsed.kind,
+    })}`,
+  );
+}
+
 export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
   const bot = new Bot(token);
   const config = getTelegramConfig();
@@ -122,6 +180,7 @@ export function createTelegramBot(token: string, deps: HandlerDeps): Bot {
       (ctx.me?.username as string | undefined) ?? config.botUsername ?? DEFAULT_BOT_USERNAME;
     logCommandParseDebug(text, botUsername, usernameSource);
     const parsed = parseInstruction(text, { botUsername });
+    logInstructionDispatchDebug(parsed, isGroupChat(user.chatType) ? "group" : "private");
 
     if (isGroupChat(user.chatType)) {
       await handleGroupText(ctx, parsed, user, deps, config.allowedDevUserIds);

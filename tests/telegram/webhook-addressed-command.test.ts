@@ -32,7 +32,7 @@ type SentMessage = { chatId: number; text: string };
 class WebhookHarness {
   repo = new MemoryRepository();
   sent: SentMessage[] = [];
-  private bot = createTelegramBot(FAKE_TOKEN, {
+  bot = createTelegramBot(FAKE_TOKEN, {
     repo: this.repo as unknown as PostgresRepository,
   });
 
@@ -107,18 +107,37 @@ describe("webhook runtime path: addressed commands", () => {
   it("routes /pay@SolvoAgentBot <alias> <amount> USDC to community payout handling (not Unknown command)", async () => {
     const h = new WebhookHarness();
     await h.seed();
-    await h.push("/pay@SolvoAgentBot blossom 0.01 USDC");
+    // Exact Telegram bot_command entity shape for /pay@SolvoAgentBot (18 chars).
+    const update: Update = {
+      update_id: 5001,
+      message: {
+        message_id: 8,
+        date: Math.floor(Date.now() / 1000),
+        chat: { id: CHAT, type: "supergroup", title: "Solvo Test" },
+        from: { id: Number(MEMBER), is_bot: false, first_name: "Member" },
+        text: "/pay@SolvoAgentBot blossom 0.01 USDC",
+        entities: [{ offset: 0, length: 18, type: "bot_command" }],
+      },
+    };
+    await h.bot.handleUpdate(update);
 
-    assert.match(h.lastReply(), /approval|pending|Approval|APPROVE/i);
-    assert.ok(!h.lastReply().includes("Unknown command"), "must not hit unknownCommandResult");
+    const reply = h.lastReply();
+    assert.ok(!reply.includes("Unknown command"), "must not hit unknownCommandResult");
+    assert.match(reply, /approval|pending|Approval|APPROVE/i);
 
+    // Reached the community pay alias branch: exactly one pending payout row.
     const payouts = [...h.repo.payouts.values()];
     assert.equal(payouts.length, 1, "exactly one payout row");
     assert.equal(payouts[0].status, "pending_approval");
+    assert.equal(payouts[0].source_type, "telegram_command");
     const items = await h.repo.getPayoutItemsByPayoutId(payouts[0].id);
     assert.equal(items.length, 1);
     assert.equal(items[0].recipient_address.toLowerCase(), ADDRESS.toLowerCase(), "alias blossom resolved");
     assert.equal(items[0].amount_base_units, "10000");
+
+    // Request time must never create execution attempts or call KeeperHub.
+    assert.equal(h.repo.executionAttempts.size, 0, "no execution attempt at request time");
+    assert.ok(!reply.includes("executed") && !reply.includes("hash"), "no proof/execution claims in reply");
   });
 
   it("matches the bot username case-insensitively through the webhook path", async () => {
@@ -127,6 +146,20 @@ describe("webhook runtime path: addressed commands", () => {
     await h.push("/pay@solvoagentbot blossom 0.01 USDC");
     assert.match(h.lastReply(), /approval|pending|Approval|APPROVE/i);
     assert.equal([...h.repo.payouts.values()].length, 1);
+    assert.equal(h.repo.executionAttempts.size, 0);
+  });
+
+  it("routes addressed wallet /pay@SolvoAgentBot <address> <amount> USDC like the plain form", async () => {
+    const h = new WebhookHarness();
+    await h.seed();
+    await h.push(`/pay@SolvoAgentBot ${ADDRESS} 0.01 USDC`);
+    const reply = h.lastReply();
+    assert.ok(!reply.includes("Unknown command"));
+    assert.match(reply, /approval|pending|Approval|APPROVE/i);
+    const payouts = [...h.repo.payouts.values()];
+    assert.equal(payouts.length, 1);
+    assert.equal(payouts[0].status, "pending_approval");
+    assert.equal(h.repo.executionAttempts.size, 0, "wallet /pay must not execute at request time");
   });
 
   it("keeps the plain /pay alias form working through the webhook path", async () => {
@@ -143,6 +176,7 @@ describe("webhook runtime path: addressed commands", () => {
     await h.push("/dashboard@SolvoAgentBot", OWNER);
     assert.match(h.lastReply(), /Open your Solvo dashboard\./);
     assert.ok(!h.lastReply().includes("Unknown command"));
+    assert.equal(h.repo.executionAttempts.size, 0);
   });
 
   it("routes /recipient@SolvoAgentBot list and /member@SolvoAgentBot list", async () => {
@@ -150,8 +184,10 @@ describe("webhook runtime path: addressed commands", () => {
     await h.seed();
     await h.push("/recipient@SolvoAgentBot list", OWNER);
     assert.match(h.lastReply(), /blossom/);
+    assert.ok(!h.lastReply().includes("Unknown command"));
     await h.push("/member@SolvoAgentBot list", OWNER);
     assert.ok(!h.lastReply().includes("Unknown command"));
+    assert.equal(h.repo.executionAttempts.size, 0);
   });
 
   it("still rejects unknown addressed commands with Unknown command", async () => {
