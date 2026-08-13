@@ -9,11 +9,7 @@ type CtaProps = {
   variant?: "outline" | "light" | "dark";
 };
 
-/**
- * Solvo outline action. Transparent background, hairline border, no fill on
- * hover. When `disabled`, renders a non-interactive element that never
- * pretends to work.
- */
+/** Solvo action. Disabled states render a truthful, non-interactive element. */
 export function Cta(props: CtaProps) {
   const {
     children,
@@ -35,7 +31,7 @@ export function Cta(props: CtaProps) {
     light: "border-[#b95516] bg-[#b95516] text-[#160b05] opacity-80",
     dark: "border-[rgba(255,255,255,0.08)] bg-[#151515] text-muted",
   }[variant];
-  const styles = `inline-flex min-h-11 items-center justify-center gap-2 border px-6 py-[10px] text-[11px] font-semibold leading-[1.2] tracking-[-0.01em] ${
+  const styles = `cta-shell relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden border px-6 py-[10px] text-[11px] font-semibold leading-[1.2] tracking-[-0.01em] ${
     disabled
       ? `cursor-not-allowed ${disabledVariantStyles}`
       : variantStyles

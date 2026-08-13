@@ -1,14 +1,22 @@
+import Image from "next/image";
+
 type WordmarkProps = {
   className?: string;
 };
 
-/** The visible Solvo wordmark. Orange is the shared brand signal. */
+/** Shared brand mark. Its parent link provides the accessible destination name. */
 export function Wordmark({ className = "" }: WordmarkProps) {
   return (
     <span
-      className={`solvo-wordmark whitespace-nowrap text-[15px] font-semibold leading-none tracking-[-0.035em] ${className}`}
+      className={`solvo-wordmark relative block shrink-0 overflow-hidden rounded-[11px] ${className}`}
     >
-      Solvo<span className="solvo-wordmark-point" aria-hidden="true">.</span>
+      <Image
+        src="/images/photo_2026-08-13_17-01-38.jpg"
+        alt="Solvo"
+        fill
+        sizes="(max-width: 640px) 38px, 42px"
+        className="solvo-wordmark-image"
+      />
     </span>
   );
 }

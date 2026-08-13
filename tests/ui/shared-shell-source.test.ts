@@ -17,13 +17,15 @@ test("public pages inherit the shared substrate, width, navigation, and footer",
   assert.match(pageShell, /<Footer \/>/);
 });
 
-test("the wordmark has an accessible replacement seam instead of embedding a logo asset", () => {
+test("the wordmark is a shared, accessible image logo", () => {
   assert.match(wordmark, /export function Wordmark/);
-  assert.match(wordmark, />\s*Solvo<span/);
-  assert.match(wordmark, /solvo-wordmark-point/);
-  assert.doesNotMatch(wordmark, /<svg\b|<Image\b|<img\b/);
+  assert.match(wordmark, /<Image\b/);
+  assert.match(wordmark, /alt="Solvo"/);
+  assert.match(wordmark, /overflow-hidden/);
+  assert.doesNotMatch(wordmark, />\s*Solvo\s*</);
   assert.match(siteNav, /<Wordmark \/>/);
   assert.match(dashboardLayout, /<Wordmark \/>/);
+  assert.match(siteNav, /aria-label="Solvo home"/);
 });
 
 test("site mobile menu exposes state, closes on Escape, and restores focus", () => {

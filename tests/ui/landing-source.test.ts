@@ -71,17 +71,24 @@ test("black and orange homepage tokens govern its panel and grid treatment", () 
   assert.match(globals, /\.execution-badge-dot\s*\{[\s\S]*var\(--color-solvo-orange\)/);
 });
 
-test("the full visible wordmark uses the orange brand signal", () => {
-  assert.match(wordmark, /className=\{`solvo-wordmark/);
-  assert.match(globals, /\.solvo-wordmark\s*\{[\s\S]*color:\s*var\(--color-solvo-orange\)/);
-  assert.doesNotMatch(wordmark, /\btext-primary\b/);
+test("the shared wordmark uses the supplied image and crops its margin", () => {
+  assert.match(wordmark, /import Image from "next\/image"/);
+  assert.match(wordmark, /photo_2026-08-13_17-01-38\.jpg/);
+  assert.match(wordmark, /alt="Solvo"/);
+  assert.doesNotMatch(wordmark, />\s*Solvo\s*</);
+  assert.match(globals, /\.solvo-wordmark\s*\{[\s\S]*width:\s*42px;[\s\S]*height:\s*42px/);
+  assert.match(globals, /\.solvo-wordmark-image\s*\{[\s\S]*object-fit:\s*cover;[\s\S]*transform:\s*scale\(1\.56\)/);
 });
 
-test("light actions use orange rather than white and disabled copy stays readable", () => {
+test("actions use glossy orange and charcoal surfaces while disabled copy stays readable", () => {
   assert.match(cta, /light:\s*"cta-light border-\[#ff7417\] bg-\[#ff7417\] text-\[#160b05\]"/);
   assert.match(cta, /light:\s*"border-\[#b95516\] bg-\[#b95516\] text-\[#160b05\] opacity-80"/);
   assert.doesNotMatch(cta, /bg-white|border-white/);
   assert.match(cta, /aria-disabled="true"/);
+  assert.match(cta, /cta-shell/);
+  assert.match(globals, /\.cta-light\s*\{[\s\S]*linear-gradient[\s\S]*box-shadow/);
+  assert.match(globals, /\.cta-dark,[\s\S]*\.cta-outline\s*\{[\s\S]*linear-gradient/);
+  assert.match(globals, /\.cta-shell\[aria-disabled="true"\]/);
 });
 
 test("desktop panel is viewport-bounded and the generated artwork stays compact", () => {
@@ -100,4 +107,12 @@ test("hero and decorative motion have a reduced-motion fallback", () => {
   assert.ok(reduced, "expected a reduced-motion media query");
   assert.match(reduced, /animation-duration:\s*0\.01ms !important/);
   assert.match(reduced, /scroll-behavior:\s*auto !important/);
+  assert.match(globals, /\.hero-state\s*\{[\s\S]*animation:\s*hero-state-float/);
+  assert.match(reduced, /\.hero-state/);
+});
+
+test("mobile hero actions stay compact and wrap only on very narrow screens", () => {
+  assert.match(globals, /@media \(max-width: 640px\)[\s\S]*\.hero-actions\s*\{[\s\S]*flex-wrap:\s*nowrap/);
+  assert.match(globals, /\.hero-actions > \*\s*\{[\s\S]*padding-inline:\s*17px/);
+  assert.match(globals, /@media \(max-width: 350px\)[\s\S]*flex-wrap:\s*wrap/);
 });
