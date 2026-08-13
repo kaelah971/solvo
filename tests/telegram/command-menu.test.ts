@@ -15,7 +15,7 @@ import { helpMessage } from "../../src/server/telegram/messages.ts";
 
 type FakeBot = Pick<Bot, "api">;
 
-const IMPLEMENTED = ["start", "help", "pay", "status", "judgepay", "workspace", "member", "recipient", "batch", "claimpay", "claimstatus"];
+const IMPLEMENTED = ["start", "help", "pay", "status", "judgepay", "workspace", "member", "recipient", "batch", "claimpay", "claimstatus", "dashboard"];
 const DEFERRED = ["distribute", "send", "claim", "judge", "withdraw", "limits", "admin"];
 
 describe("command source of truth", () => {

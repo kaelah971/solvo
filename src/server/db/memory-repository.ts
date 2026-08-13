@@ -11,6 +11,7 @@ import type {
   AddRecipientInput,
   AppendAuditEventInput,
   CreateAgentRunInput,
+  CreateDashboardLoginTokenInput,
   CreateExecutionAttemptInput,
   CreateMemberInput,
   CreatePayoutInput,
@@ -24,6 +25,7 @@ import type {
   ListClaimLinksOptions,
   ListPayoutItemsOptions,
   ListPayoutsOptions,
+  DashboardLoginTokenRow,
 } from "./repository.ts";
 import { clampDashboardLimit } from "./repository.ts";
 import {
@@ -87,6 +89,7 @@ export class MemoryRepository implements SolvoRepository {
     const auditEvents = [...this.auditEvents];
     const claimLinks = new Map(this.claimLinks);
     const agentRuns = new Map(this.agentRuns);
+    const dashboardLoginTokens = new Map(this.dashboardLoginTokens);
     try {
       return await fn(this);
     } catch (error) {
@@ -99,6 +102,7 @@ export class MemoryRepository implements SolvoRepository {
       this.auditEvents = auditEvents;
       this.claimLinks = claimLinks;
       this.agentRuns = agentRuns;
+      this.dashboardLoginTokens = dashboardLoginTokens;
       throw error;
     } finally {
       release();
@@ -832,6 +836,40 @@ export class MemoryRepository implements SolvoRepository {
     return [...this.agentRuns.values()].filter(
       (run) => run.telegram_user_id === input.telegramUserId && run.started_at >= input.sinceIso,
     ).length;
+  }
+
+  // ── M12.4 dashboard login tokens (hash-only, single-use) ─────────────────
+
+  dashboardLoginTokens = new Map<string, DashboardLoginTokenRow>();
+
+  async createDashboardLoginToken(input: CreateDashboardLoginTokenInput): Promise<DashboardLoginTokenRow> {
+    const existing = this.dashboardLoginTokens.get(input.tokenHash);
+    if (existing) return existing;
+    const row: DashboardLoginTokenRow = {
+      id: randomUUID(),
+      token_hash: input.tokenHash,
+      workspace_id: input.workspaceId,
+      telegram_user_id: input.telegramUserId,
+      member_id: input.memberId,
+      role: input.role,
+      expires_at: input.expiresAt,
+      used_at: null,
+      created_at: nowIso(),
+    };
+    this.dashboardLoginTokens.set(row.token_hash, row);
+    return row;
+  }
+
+  async getDashboardLoginTokenByHash(tokenHash: string): Promise<DashboardLoginTokenRow | null> {
+    return this.dashboardLoginTokens.get(tokenHash) ?? null;
+  }
+
+  async consumeDashboardLoginToken(tokenHash: string, usedAtIso: string): Promise<DashboardLoginTokenRow | null> {
+    const row = this.dashboardLoginTokens.get(tokenHash);
+    if (!row || row.used_at !== null) return null;
+    const updated: DashboardLoginTokenRow = { ...row, used_at: usedAtIso };
+    this.dashboardLoginTokens.set(tokenHash, updated);
+    return updated;
   }
 }
 

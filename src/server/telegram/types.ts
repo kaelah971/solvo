@@ -58,6 +58,10 @@ export type ClaimStatusInstruction = {
   claimId: string | null;
 };
 
+export type DashboardInstruction = {
+  kind: "dashboard";
+};
+
 export type WorkspaceInitInstruction = {
   kind: "workspace_init";
 };
@@ -95,6 +99,7 @@ export type Instruction =
   | ClaimPayInstruction
   | StatusInstruction
   | ClaimStatusInstruction
+  | DashboardInstruction
   | WorkspaceInitInstruction
   | MemberAddInstruction
   | MemberRemoveInstruction

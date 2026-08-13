@@ -248,6 +248,17 @@ export function parseInstruction(text: string, options: { botUsername?: string |
     };
   }
 
+  if (subject === "/dashboard") {
+    return { kind: "dashboard" };
+  }
+  if (/^\/dashboard\s+/.test(subject)) {
+    return {
+      kind: "failure",
+      reason: "Invalid dashboard command.",
+      hint: "Use /dashboard to open your workspace dashboard.",
+    };
+  }
+
   const batchMatch = /^\/batch\s*\n([\s\S]*)$/.exec(subject);
   if (batchMatch) {
     if (batchMatch[1].trim().length === 0) {

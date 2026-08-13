@@ -2,10 +2,68 @@
 
 Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
-Status: **M12.1 design + M12.2 read models + M12.3 overview shell implemented.**
-The operator console is specified; the safe read-model layer and the first
-personalized route ship. No Telegram `/dashboard` login link, full session
-store, or admin actions exist yet, and no migrations were applied.
+Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
+login bridge implemented.** The operator console is specified; the read-model
+layer, the `/app` overview, and the Telegram → web dashboard login flow ship.
+No admin actions exist yet, and no migrations were applied.
+
+## M12.4 Telegram dashboard login bridge (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.3):
+
+- **`/dashboard` Telegram command** (community group chats only; registered
+  in the command registry/menu with the same "implemented-only" discipline).
+  `src/server/telegram/flows/dashboard-flow.ts` issues a one-time login link
+  to an ACTIVE community workspace member; every denied shape — private chat,
+  unknown chat workspace, non-community mode, non-member, inactive member —
+  replies with the SAME generic copy: "Dashboard unavailable. Ask a workspace
+  owner to add you, then try /dashboard again." (no existence leak, no
+  workspace/member ids). The reply shows the link + "This link expires in 10
+  minutes and can be used once." No payment/approval/execution surface is
+  touched; no console logging exists in the flow.
+- **One-time login tokens** (`src/server/dashboard/login-links.ts`): 256-bit
+  CSPRNG base64url raw token returned exactly once; ONLY its SHA-256 hash is
+  persisted (`dashboard_login_tokens`); expiry 10 minutes (default); single-
+  use via an atomic `used_at` consume (raced consumes collapse to one);
+  scoped to workspace_id + telegram_user_id + member_id + role; raw tokens
+  never appear in storage, audit metadata, logs, or errors.
+- **Persistence**: `createDashboardLoginToken` /
+  `getDashboardLoginTokenByHash` / `consumeDashboardLoginToken` in the
+  repository interface + MemoryRepository + PostgresRepository.
+  **Migration `migrations/0014_dashboard_login_tokens.sql` EXISTS but was NOT
+  applied** — it must run (`npm run db:migrate`) before live login-token
+  creation; no migration was applied by the M12.4 gates.
+- **`/auth/telegram-link`** (route handler): verifies the token
+  (unknown/expired/used → generic unavailable), RE-CHECKS ACTIVE same-
+  workspace membership from the repository (`resolveDashboardContext` +
+  `canViewDashboard`), atomically consumes the token, sets the session cookie,
+  redirects to `/app`. Invalid/expired/used/nonmember/inactive all redirect to
+  `/app` with no cookie — /app renders the generic no-leak unavailable
+  screen. The token is never logged or echoed.
+- **Signed session cookie** (session seam upgraded): `solvo_dash_session` =
+  `base64url(payload).base64url(hmac-sha256)` keyed by
+  `SOLVO_DASHBOARD_COOKIE_SECRET` (production REQUIRES the env secret; a
+  marked dev constant is used outside production; production without a secret
+  refuses all cookies). Attributes: HttpOnly, SameSite=Strict, Secure in
+  production, Path=/, Max-Age 7 days. Tampered cookies fail verification.
+  `/app` STILL re-checks repository membership on every request —
+  `requireDashboardContext` — so removed/inactive members lose access even
+  with a valid cookie, and a signed cookie for another workspace is rejected.
+- **`/auth/logout`** (route handler): clears the session cookie (Max-Age 0)
+  and redirects to `/`.
+- **Tests** (+30): token service (entropy, hash-only storage, verify/
+  unknown/expired/used, single-use consume, scoping, no-raw-token rules),
+  session issuance (cookie attributes, consumed-once, invalid/expired/used
+  identical unavailable, nonmember/inactive never issue and tokens stay
+  unconsumed, membership re-check kills removed members, cross-workspace
+  cookie rejection, tamper rejection, production-without-secret refusal),
+  Telegram /dashboard (parsing + addressed form, owner/approver/member links,
+  denied-shape identical copy, no id leaks, zero payment/execution artifacts,
+  no logging), command-menu update, source contracts (login/session/route/
+  flow modules import no KeeperHub/MCP/execution writer/model provider; the
+  Telegram flow imports no payment path; route never renders the token).
+- **No actions/execution**: the login bridge issues identity only; approvals
+  and admin actions remain future M12 slices.
 
 ## M12.3 overview shell (implemented)
 

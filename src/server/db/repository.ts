@@ -157,6 +157,29 @@ export type ListPayoutItemsOptions = DashboardListOptions & {
   completedSinceIso?: string;
 };
 
+// ── M12.4 dashboard login tokens (hash-only persistence) ───────────────────
+
+export type DashboardLoginTokenRow = {
+  id: string;
+  token_hash: string;
+  workspace_id: string;
+  telegram_user_id: string;
+  member_id: string;
+  role: MemberRole;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+};
+
+export type CreateDashboardLoginTokenInput = {
+  tokenHash: string;
+  workspaceId: string;
+  telegramUserId: string;
+  memberId: string;
+  role: MemberRole;
+  expiresAt: string;
+};
+
 export type UpdateAgentRunInput = {
   status?: AgentRunStatus;
   intentKind?: string | null;
@@ -373,4 +396,14 @@ export interface SolvoRepository {
   getAgentRunById(id: string): Promise<AgentRunRow | null>;
   updateAgentRun(id: string, input: UpdateAgentRunInput): Promise<AgentRunRow>;
   countAgentRunsSince(input: { telegramUserId: string; sinceIso: string }): Promise<number>;
+
+  // ── M12.4 dashboard login tokens ─────────────────────────────────────────
+
+  createDashboardLoginToken(input: CreateDashboardLoginTokenInput): Promise<DashboardLoginTokenRow>;
+  getDashboardLoginTokenByHash(tokenHash: string): Promise<DashboardLoginTokenRow | null>;
+  /**
+   * Atomically marks an unused token as used and returns it; returns null
+   * when the token is unknown or already used (single-use guarantee).
+   */
+  consumeDashboardLoginToken(tokenHash: string, usedAtIso: string): Promise<DashboardLoginTokenRow | null>;
 }

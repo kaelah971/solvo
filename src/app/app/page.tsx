@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { StatePanel } from "@/components/StatePanel";
 import { SectionLabel } from "@/components/SectionLabel";
 import { getDbRepository } from "@/server/db/accessor";
-import { getDashboardSessionFromHeaders, requireDashboardContext } from "@/server/dashboard/session";
+import { getDashboardCookieSecret, getDashboardSessionFromHeaders, requireDashboardContext } from "@/server/dashboard/session";
 import {
   agentRunDecisionLabel,
   agentRunStatusLabel,
@@ -33,7 +33,8 @@ export const dynamic = "force-dynamic";
  * nothing on this page approves or executes.
  */
 export default async function OverviewPage() {
-  const session = getDashboardSessionFromHeaders(await headers());
+  const secret = getDashboardCookieSecret();
+  const session = secret !== null ? getDashboardSessionFromHeaders(await headers(), secret) : null;
   const repo = getDbRepository();
   if (repo === null) return <DashboardUnavailable />;
 

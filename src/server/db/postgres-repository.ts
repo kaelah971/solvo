@@ -7,11 +7,13 @@ import type {
   AddRecipientInput,
   AppendAuditEventInput,
   CreateAgentRunInput,
+  CreateDashboardLoginTokenInput,
   CreateExecutionAttemptInput,
   CreateMemberInput,
   CreatePayoutInput,
   CreatePayoutItemInput,
   CreateWorkspaceInput,
+  DashboardLoginTokenRow,
   SolvoRepository,
   UpdateAgentRunInput,
   UpdateExecutionAttemptInput,
@@ -157,6 +159,20 @@ function mapAuditEvent(row: RawRow): AuditEventRow {  return {
     actor_type: String(row.actor_type),
     actor_id: text(row.actor_id),
     metadata: (row.metadata as Record<string, unknown>) ?? {},
+    created_at: iso(row.created_at) ?? "",
+  };
+}
+
+function mapDashboardLoginToken(row: RawRow): DashboardLoginTokenRow {
+  return {
+    id: String(row.id),
+    token_hash: String(row.token_hash),
+    workspace_id: String(row.workspace_id),
+    telegram_user_id: String(row.telegram_user_id),
+    member_id: String(row.member_id),
+    role: row.role as DashboardLoginTokenRow["role"],
+    expires_at: iso(row.expires_at) ?? "",
+    used_at: iso(row.used_at),
     created_at: iso(row.created_at) ?? "",
   };
 }
@@ -1047,6 +1063,38 @@ export class PostgresRepository implements SolvoRepository {
         AND started_at >= ${input.sinceIso}
     `;
     return Number(rows[0]?.count ?? 0);
+  }
+
+  // ── M12.4 dashboard login tokens (hash-only, single-use) ─────────────────
+
+  async createDashboardLoginToken(input: CreateDashboardLoginTokenInput): Promise<DashboardLoginTokenRow> {
+    const rows = await this.sql<RawRow[]>`
+      INSERT INTO dashboard_login_tokens (
+        token_hash, workspace_id, telegram_user_id, member_id, role, expires_at
+      ) VALUES (
+        ${input.tokenHash}, ${input.workspaceId}, ${input.telegramUserId},
+        ${input.memberId}, ${input.role}, ${input.expiresAt}
+      )
+      RETURNING *
+    `;
+    return mapDashboardLoginToken(rows[0]);
+  }
+
+  async getDashboardLoginTokenByHash(tokenHash: string): Promise<DashboardLoginTokenRow | null> {
+    const rows = await this.sql<RawRow[]>`
+      SELECT * FROM dashboard_login_tokens WHERE token_hash = ${tokenHash}
+    `;
+    return rows.length > 0 ? mapDashboardLoginToken(rows[0]) : null;
+  }
+
+  async consumeDashboardLoginToken(tokenHash: string, usedAtIso: string): Promise<DashboardLoginTokenRow | null> {
+    const rows = await this.sql<RawRow[]>`
+      UPDATE dashboard_login_tokens
+      SET used_at = ${usedAtIso}
+      WHERE token_hash = ${tokenHash} AND used_at IS NULL
+      RETURNING *
+    `;
+    return rows.length > 0 ? mapDashboardLoginToken(rows[0]) : null;
   }
 }
 
