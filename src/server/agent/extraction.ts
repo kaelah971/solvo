@@ -240,6 +240,10 @@ const UNSAFE_MARKERS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
   { pattern: /mark (this |the |it |my )?(transaction|payment|payout)?\s*(as )?(successful|completed|done)/i, flag: "fabricate_success" },
   { pattern: /fake (a |the )?(transaction|tx|hash|receipt|proof)/i, flag: "fabricate_success" },
   { pattern: /approve (it|this|that) (yourself|for me)|approve (the |my )?(payment|payout|request) (yourself|for me)|self[- ]?approve/i, flag: "approve_self" },
+  // M11 batch claim links are designed but deferred: plural "claim links" (or
+  // a count like "3 claim links") is a batch signal and must never silently
+  // create a single claim link (M11.6 §1 / §10 items 11–22).
+  { pattern: /\bclaim links\b|\d+\s+claim link\b/i, flag: "batch_claim_links" },
 ];
 
 // ── Local deterministic money grammar (mirror of keeperhub/amount.ts) ──────

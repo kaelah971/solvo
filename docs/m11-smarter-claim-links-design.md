@@ -68,6 +68,42 @@ tests: `tests/claim/claim-web-status.test.ts`).
   claim state. The raw token is never rendered after load (only the URL), and
   the token hash/prefix are never shown.
 
+## M11.7 adversarial/truthfulness gate
+
+Tests: `tests/security/claim-link-truthfulness.test.ts` (27 checks).
+
+**What M11 ships:** the claim status read model, Telegram claim status,
+web claim state UX, expiry/reissue service, and truthfulness/no-leak
+hardening — with an adversarial gate locking: no approval, no execution, no
+KeeperHub call, no raw token re-display, no token hash, no fake proof, no
+claimed-wallet mutation, and generic no-leak output for unknown ids / wrong
+workspaces / non-members from any hostile claim phrase or state attack.
+
+**What M11 does NOT ship (intentionally deferred):** claim-link batches,
+CSV/bulk claim links, unresolved M10 batch legs → claim links, Judge Mode
+claim links, auto-approval, and direct execution from claim entry. See
+`docs/m11.6-claim-link-batches-design.md` (design only) — batches belong to a
+later roadmap slice (M11.7+ under the renumbered plan), NOT this milestone.
+
+**Safety fix landed with the gate:** a batch claim signal (`claim links`
+plural, or `N claim links`) previously misparsed into ONE claim link from a
+count-based request (`create 3 claim links of 0.01 USDC each` → 1 link). The
+deterministic extraction now flags `batch_claim_links` and the static
+interpreter declines with "Claim-link batches are not supported yet. Create
+one claim link at a time." — zero artifacts until batches are implemented.
+
+Gate coverage: hostile claim phrases through the Telegram route (execute-now,
+skip-approval, self-approve, fabricate-completed, fake proof, show token
+hash, show link again, change wallet, Judge Mode, direct KeeperHub, reissue
++ approve) all decline with zero artifacts; state attacks (duplicate
+delivery never re-shows links, immutable claimed wallet, expired/already-
+claimed/cancelled submits fail, forged agent_runs and forged claim metadata
+cannot create proof) are locked; truthfulness across Telegram replies, web
+states, and reissue results is asserted; source contracts (no KeeperHub/MCP/
+execution/Telegram/webhook/model imports, no fetch, no raw SQL) hold for the
+status, web, reissue, and status-flow modules; and the M11.6 batch-corpus
+deferral is locked by regression tests.
+
 ## M11.3 Telegram status UX (implemented)
 
 Implemented in `src/server/telegram/flows/claim-status-flow.ts` (wire-up in
@@ -419,27 +455,19 @@ contract. Concrete checks (≥ 40):
   + tests; Telegram/web reissue command wiring deferred)
 - **M11.6 — per-recipient claim-link batch DESIGN** — ✅ DONE
   (`docs/m11.6-claim-link-batches-design.md`): all-or-clarify semantics,
-  per-link idempotency keys, N claim rows, 50-item test matrix, M11.7–M11.12
-  slice plan. No production behavior implemented.
-- **M11.7 — batch claim-link grammar/corpus baseline:** add the batch-claim
-  corpus with CURRENT expectations (clarification/unsupported, zero
-  artifacts) — locks "no batch yet" before any parsing (mirrors M10.2).
-- **M11.8 — batch parser/planner:** deterministic G1/G2 parsing (count/label
-  lists, uniform amounts), duplicate-label rejection, `prepared_claim_link_batch`
-  planner decision, all-or-clarify + policy checks. No persistence yet.
-- **M11.9 — batch bridge/persistence:** N `claim_links` rows via the
-  single-claim transaction shape, per-link keys `ag:<run.key>:claim:<n>`,
-  batch id in audit metadata, N raw tokens returned once. No schema change.
-- **M11.10 — Telegram reply/copy + duplicate behavior:** batch reply
-  builders (created + already-created, no token re-show), routing precedence,
-  per-link status summary aggregation.
-- **M11.11 — adversarial/truthfulness gate (renumbered from M11.7):**
-  hostile batch claim mutations, forged-run immunity, source contracts
-  (items 35–41, 47–52), no-token-reveal on duplicates, corpus flips in the
-  same commit as M11.9/M11.10.
-- **M11.12 — docs/roadmap final gate (renumbered from M11.8):** README
-  roadmap, M9/M10 doc cross-references, full gate (`npm test`, `test:db`,
-  lint, tsc, build, read-only doctors).
+  per-link idempotency keys, N claim rows, 50-item test matrix, slice plan.
+  **Design only — NO production behavior implemented, and batch
+  implementation is deferred OUT of M11** (milestone decision; batch-signal
+  phrases decline with zero artifacts).
+- **M11.7 — core claim-link adversarial/truthfulness gate:** hostile claim
+  phrases/state attacks, truthfulness across Telegram/web/reissue, source
+  contracts, and regressions — `tests/security/claim-link-truthfulness.test.ts`
+  (items 35–41, 47–52). ✅ DONE
+- **Batch claim-link implementation slices (M11.8–M11.12 in the M11.6
+  design)** — DEFERRED to a later roadmap milestone: corpus baseline,
+  parser/planner, bridge/persistence, Telegram reply/duplicate behavior,
+  batch adversarial gate, docs final gate. The M11.6 doc's slice plan is the
+  reference for that future work.
 
 Each task ends with lint + `tsc --noEmit` + the task's test files green.
 
@@ -452,6 +480,7 @@ Each task ends with lint + `tsc --noEmit` + the task's test files green.
 | Raw token re-exposure | Hash-only persistence stays; summaries show prefix only; raw shown once |
 | Reissue resurrecting old claims | Reissue = new claim row/new token; tests lock the contract |
 | Status reply overclaiming execution | Proof language only from payout pipeline; forged-run immunity tests |
-| Claim-link batch scope creep | M11.6 is design-only; implementation after status UX hardens |
+| Claim-link batch scope creep | M11.6 is design-only; implementation deferred out of M11; batch-signal phrases decline with zero artifacts |
 | Judge Mode reachable via claim status | Claim status is community-only; judge claims stay command-only |
 | Mutation bypass on claim verbs | M11.7 hostile-mutation gate (same machinery as M10.7) |
+| Batch phrase misparses as a single claim | `batch_claim_links` unsafe flag; declines with "Claim-link batches are not supported yet" (locked by tests) |

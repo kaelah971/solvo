@@ -45,6 +45,17 @@ export class StaticIntentInterpreter implements IntentInterpreter {
 export function interpretStatically(input: AgentInput, extraction: ExtractionResult): AgentInterpretation {
   const { candidates, intentHints, unsafeFlags } = extraction;
 
+  // M11 batch claim links are DESIGNED but not implemented: a batch signal
+  // ("claim links" plural or "N claim link(s)") must decline with zero
+  // artifacts — never silently create one claim link from a count-based
+  // request ("create 3 claim links of 0.01 USDC each" → 1 link is a hazard).
+  if (unsafeFlags.includes("batch_claim_links")) {
+    return unsupportedInterpretation(
+      candidates,
+      "Claim-link batches are not supported yet. Create one claim link at a time.",
+    );
+  }
+
   if (unsafeFlags.length > 0) {
     return unsupportedInterpretation(candidates, "Instruction contains unsafe text.");
   }

@@ -119,6 +119,9 @@ Deferred/optional:
 - x402 paid workflow/report surface
 - richer model provider support
 - public sandbox/community testing
+- claim-link batches / bulk claim links (designed in
+  `docs/m11.6-claim-link-batches-design.md`; implementation deferred —
+  batch-signal phrases decline with zero artifacts until then)
 
 **Safety note:** the agent prepares payment requests only. Owners/approvers
 still approve. KeeperHub execution happens only after approval. Transaction
