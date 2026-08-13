@@ -3,10 +3,66 @@
 Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
 Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
-login bridge + M12.5 payout/batch pages + M12.6 claim pages implemented.**
-The operator console is specified; read models, the `/app` overview, the
-Telegram → web login flow, the payout/batch pages, and the claim pages ship.
-No admin actions exist yet, and no migrations were applied.
+login bridge + M12.5 payout/batch pages + M12.6 claim pages + M12.7
+recipients/members pages implemented.** The operator console is specified;
+read models, the `/app` overview, the Telegram → web login flow, the
+payout/batch pages, the claim pages, and the directory pages ship. No admin
+actions exist yet, and no migrations were applied.
+
+## M12.7 recipients and members pages (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.6):
+
+- **Routes added**: `/app/recipients` (alias directory) and `/app/members`
+  (workspace member directory) — both server-rendered (`force-dynamic`),
+  read-only, and gated by the same M12.3/M12.4 session flow (signed cookie →
+  repo re-check of ACTIVE same-workspace membership → gated page model). The
+  dashboard shell nav now links Overview / Payouts / Batches / Claims /
+  Recipients / Members (+ Sign out); no links exist for unimplemented
+  sections.
+- **Read-only behavior**: no forms, buttons, server actions, or client
+  handlers anywhere on the directory pages. No add/edit/delete recipient
+  surface and no add/remove/change-role member surface exists.
+- **Workspace/session gate**: no session, unknown workspace, non-member,
+  inactive member, and no-DB all render the single generic
+  `DashboardUnavailable` panel. Identities are masked everywhere (`1112…333`
+  style); no raw telegram user ids render; no workspace/member existence
+  leak.
+- **Member/recipient visibility**: recipients show the alias, the wallet
+  (FULL for owners/approvers, masked `0x76d7…7486` for members — the read
+  model's `canViewSensitiveDestinations` rule), saved-by label, created and
+  updated timestamps. Members show masked identity, role badge
+  (OWNER/APPROVER/MEMBER), status badge (ACTIVE/INACTIVE), joined and
+  updated timestamps. Recipient rows carry no stored token/network/status
+  fields today, so none are fabricated.
+- **Role labels**: pure page-model mappers (`memberRoleLabel`,
+  `memberStatusLabel`) keep internal role/status terms out of page copy.
+- **Separation-of-duty copy** (members page): "Roles control what people can
+  request, approve, and manage." / "Separation of duty is enforced
+  server-side: requesters cannot approve their own payout." / "Changing roles
+  is not enabled from the dashboard yet."
+- **Aliases-do-not-move-funds copy** (recipients page): "Recipients are
+  saved aliases. Saving an alias does not move funds." / "Payments still
+  require approval and KeeperHub execution."
+- **No actions yet**: nothing on either page can add, edit, remove, or
+  change roles; no approvals/execution surface; no migrations were applied
+  during the M12.7 gates (0013/0014 remain unapplied).
+- **Page model** (`src/server/dashboard/directory-page.ts`): gated wrappers
+  over the M12.2 member/recipient read models (`buildRecipientsPageModel` /
+  `buildMembersPageModel`) plus the role/status display labels. The member
+  read-model view gained `updatedAt` (additive; `MemberListItemView` +
+  `buildMemberListItemView`).
+- **Tests** (+~20): recipients/members page-model tests for gating
+  (owner/approver/member render, nonmember/inactive identical unavailable),
+  workspace scoping (cross-workspace rows never appear), honest empty
+  states, alias + timestamps, member masking vs owner/approver full wallets,
+  masked identities, role/status labels, JSON-serializability, and no
+  token/provider/execution material in serialized models; route
+  source-contract tests (forbidden imports, truthful copy, honest empty
+  states, no add/edit/delete/role-change controls, banned terms, shell nav
+  includes Recipients + Members, every denied path renders the shared
+  unavailable panel). `tests/dashboard/payout-route-source.test.ts` nav
+  assertion updated: Recipients and Members are now linked sections.
 
 ## M12.6 claim pages (implemented)
 

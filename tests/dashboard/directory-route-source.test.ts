@@ -3,21 +3,21 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 /**
- * M12.5 — Payout/batch route source contract.
+ * M12.7 — Recipient/member route source contract.
  *
- * The payout pages are read-only renderers: no execution/KeeperHub/Telegram/
- * model surface, no action controls, no fake proof, and only the truthful
- * payout vocabulary.
+ * The directory pages are read-only renderers: no execution/KeeperHub/
+ * Telegram/model surface, no add/edit/delete/role-change controls, no raw
+ * identity data, and only the truthful directory vocabulary.
  */
 const PAGE_FILES = [
-  "src/app/app/payouts/page.tsx",
-  "src/app/app/payouts/[id]/page.tsx",
-  "src/app/app/batches/page.tsx",
-  "src/app/app/batches/[id]/page.tsx",
+  "src/app/app/recipients/page.tsx",
+  "src/app/app/members/page.tsx",
 ];
 
 const MODEL_FILES = [
-  "src/server/dashboard/payouts-page.ts",
+  "src/server/dashboard/directory-page.ts",
+  "src/server/dashboard/recipients.ts",
+  "src/server/dashboard/members.ts",
   "src/server/dashboard/page-gate.ts",
 ];
 
@@ -47,6 +47,7 @@ const BANNED_OUTPUT_TERMS = [
   "token_hash",
   "tokenHash",
   "token_prefix",
+  "tokenPrefix",
   "idempotency",
   "raw JSON",
   "keeperhub_execution_id",
@@ -57,9 +58,10 @@ const BANNED_OUTPUT_TERMS = [
   "interpretation_json",
   "decision_json",
   "simulation_result",
+  "raw_keeperhub_status",
 ];
 
-describe("payout/batch route source contract", () => {
+describe("directory route source contract", () => {
   it("imports no KeeperHub/MCP/execution writer/Telegram/webhook/model-provider/fetch surface", () => {
     for (const file of [...PAGE_FILES, ...MODEL_FILES]) {
       const source = readFileSync(file, "utf8");
@@ -75,20 +77,17 @@ describe("payout/batch route source contract", () => {
   });
 
   it("pages contain the truthful copy and honest empty states", () => {
-    const payouts = readFileSync("src/app/app/payouts/page.tsx", "utf8");
-    assert.match(payouts, /No payout requests yet\./);
-    assert.match(payouts, /Approved does not mean\s+executed/);
-    const detail = readFileSync("src/app/app/payouts/[id]/page.tsx", "utf8");
-    assert.match(detail, /Approved does not mean\s+executed\./);
-    assert.match(detail, /Completed proof appears only when the execution pipeline recorded a\s+transaction\./);
-    const batches = readFileSync("src/app/app/batches/page.tsx", "utf8");
-    assert.match(batches, /No batch payouts yet\./);
-    const batchDetail = readFileSync("src/app/app/batches/[id]/page.tsx", "utf8");
-    assert.match(batchDetail, /Completed proof appears only when the execution pipeline recorded a\s+transaction\./);
-    assert.match(batchDetail, /no approve, reject, or retry controls/);
+    const recipients = readFileSync("src/app/app/recipients/page.tsx", "utf8");
+    assert.match(recipients, /No recipients saved yet\./);
+    assert.match(recipients, /Recipients are saved aliases\. Saving an alias does not move\s+funds\./);
+    assert.match(recipients, /Payments still require approval and KeeperHub execution\./);
+    const members = readFileSync("src/app/app/members/page.tsx", "utf8");
+    assert.match(members, /Roles control what people can request, approve, and manage\./);
+    assert.match(members, /Separation of duty is enforced server-side: requesters cannot\s+approve their own payout\./);
+    assert.match(members, /Changing roles is not enabled from the\s+dashboard yet\./);
   });
 
-  it("contains no admin action controls", () => {
+  it("contains no add/edit/delete/role-change controls or forms", () => {
     for (const file of PAGE_FILES) {
       const source = readFileSync(file, "utf8");
       assert.equal(source.includes('"use client"'), false, `${file} must be a server component`);
@@ -97,9 +96,13 @@ describe("payout/batch route source contract", () => {
       assert.equal(source.includes("onClick"), false, `${file} has a client handler`);
       assert.equal(source.includes("<button"), false, `${file} has a button`);
       assert.equal(source.includes("type=\"submit\""), false);
+      assert.equal(source.includes("ADD"), false);
+      assert.equal(source.includes("EDIT"), false);
+      assert.equal(source.includes("REMOVE"), false);
+      assert.equal(source.includes("DELETE"), false);
+      assert.equal(source.includes("CHANGE ROLE"), false);
       assert.equal(source.includes("APPROVE"), false);
       assert.equal(source.includes("REJECT"), false);
-      assert.equal(source.includes("RETRY"), false);
       assert.equal(source.includes("EXECUTE"), false);
     }
   });
@@ -110,19 +113,8 @@ describe("payout/batch route source contract", () => {
       for (const banned of BANNED_OUTPUT_TERMS) {
         assert.equal(source.includes(banned), false, `${file} contains banned term "${banned}"`);
       }
-    }
-  });
-
-  it("proof renders only behind a pipeline-hash guard; no hardcoded hashes", () => {
-    for (const file of ["src/app/app/payouts/[id]/page.tsx", "src/app/app/batches/[id]/page.tsx"]) {
-      const source = readFileSync(file, "utf8");
-      assert.match(source, /item\.txHash !== null/, `${file} must guard proof rendering`);
-      assert.match(source, /item\.txExplorerUrl !== null/, `${file} must guard the explorer link`);
       assert.equal(/0x[0-9a-fA-F]{64}/.test(source), false, `${file} contains a hash-shaped literal`);
     }
-    // The list pages never render hashes at all.
-    assert.equal(readFileSync("src/app/app/payouts/page.tsx", "utf8").includes("txHash"), false);
-    assert.equal(readFileSync("src/app/app/batches/page.tsx", "utf8").includes("txHash"), false);
   });
 
   it("page models never expose execution ids or raw blobs", () => {
@@ -137,26 +129,17 @@ describe("payout/batch route source contract", () => {
     }
   });
 
-  it("dashboard shell navigation links only implemented sections", () => {
+  it("dashboard shell navigation includes Recipients and Members", () => {
     const layout = readFileSync("src/app/app/layout.tsx", "utf8");
-    assert.match(layout, /href: "\/app"/);
-    assert.match(layout, /href: "\/app\/payouts"/);
-    assert.match(layout, /href: "\/app\/batches"/);
-    assert.match(layout, /href: "\/app\/claims"/);
     assert.match(layout, /href: "\/app\/recipients"/);
     assert.match(layout, /href: "\/app\/members"/);
-    // Unimplemented sections must not be linked.
-    for (const missing of ["approvals", "policies", "audit", "agent-runs", "settings"]) {
-      assert.equal(layout.includes(`"${missing}"`), false, `layout links to unimplemented section /${missing}`);
-    }
   });
 
-  it("the not-found panel is generic and takes no ids", () => {
-    const panels = readFileSync("src/components/DashboardPanels.tsx", "utf8");
-    assert.match(panels, /REQUEST NOT FOUND/);
-    assert.match(panels, /The request does not exist or is outside your workspace\./);
-    assert.equal(panels.includes("workspaceId"), false);
-    assert.equal(panels.includes("payoutId"), false);
-    assert.equal(panels.includes("claimId"), false);
+  it("every denied path renders the same unavailable screen", () => {
+    for (const file of PAGE_FILES) {
+      const source = readFileSync(file, "utf8");
+      const branches = (source.match(/return <DashboardUnavailable \/>;/g) ?? []).length;
+      assert.ok(branches >= 3, `${file}: expected >=3 unavailable branches, got ${branches}`);
+    }
   });
 });

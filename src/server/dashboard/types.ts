@@ -168,6 +168,7 @@ export type MemberListItemView = {
   /** Masked telegram identity. */
   maskedId: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type RecipientListItemView = {

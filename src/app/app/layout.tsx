@@ -17,10 +17,12 @@ const DASHBOARD_SECTIONS = [
   { href: "/app/payouts", label: "Payouts" },
   { href: "/app/batches", label: "Batches" },
   { href: "/app/claims", label: "Claims" },
+  { href: "/app/recipients", label: "Recipients" },
+  { href: "/app/members", label: "Members" },
 ];
 
 /**
- * M12.3/M12.6 — Operator dashboard shell.
+ * M12.3/M12.7 — Operator dashboard shell.
  *
  * Slim operator chrome: wordmark + section navigation (only implemented
  * pages are linked) + sign out. Authentication is handled per-page through

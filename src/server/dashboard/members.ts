@@ -25,5 +25,6 @@ export function buildMemberListItemView(member: WorkspaceMemberRow): MemberListI
     status: member.status,
     maskedId: maskIdentity(member.telegram_user_id) ?? "…",
     createdAt: member.created_at,
+    updatedAt: member.updated_at,
   };
 }
