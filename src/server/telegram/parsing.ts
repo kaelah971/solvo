@@ -10,6 +10,10 @@ const COMMAND_TOKEN = /^\/([A-Za-z0-9_]+)(?:@([A-Za-z0-9_]+))?/;
 
 const PAY_COMMAND = new RegExp(`^\\/pay\\s+${ADDRESS}\\s+${AMOUNT}\\s+${TOKEN}\\s*$`, "i");
 const PAY_COMMAND_NO_TOKEN = new RegExp(`^\\/pay\\s+${ADDRESS}\\s+${AMOUNT}\\s*$`, "i");
+/** Slash alias form: `/pay blossom 0.01 USDC` (workspace recipient alias). Address-shaped tokens (0x…) are excluded. */
+const SLASH_ALIAS = "((?![0][xX])[a-z0-9][a-z0-9_-]{0,31})";
+const PAY_ALIAS_COMMAND = new RegExp(`^\\/pay\\s+${SLASH_ALIAS}\\s+${AMOUNT}\\s+${TOKEN}\\s*$`, "i");
+const PAY_ALIAS_COMMAND_NO_TOKEN = new RegExp(`^\\/pay\\s+${SLASH_ALIAS}\\s+${AMOUNT}\\s*$`, "i");
 
 const NL_AMOUNT_FIRST = new RegExp(`^(?:send|pay)\\s+${AMOUNT}\\s+${TOKEN}\\s+to\\s+${ADDRESS}\\s*$`, "i");
 const NL_ADDRESS_FIRST = new RegExp(`^(?:send|pay)\\s+${ADDRESS}\\s+${AMOUNT}\\s+${TOKEN}\\s*$`, "i");
@@ -195,6 +199,30 @@ export function parseInstruction(text: string, options: { botUsername?: string |
   const commandNoToken = PAY_COMMAND_NO_TOKEN.exec(subject);
   if (commandNoToken) {
     return unsupportedTokenHint();
+  }
+  const aliasCommand = PAY_ALIAS_COMMAND.exec(subject);
+  if (aliasCommand) {
+    if (aliasCommand[3].toLowerCase() !== "usdc") {
+      return unsupportedTokenHint();
+    }
+    return {
+      kind: "pay_alias",
+      alias: aliasCommand[1],
+      amount: aliasCommand[2],
+      token: "USDC",
+      sourceType: "telegram_command",
+    };
+  }
+  const aliasCommandNoToken = PAY_ALIAS_COMMAND_NO_TOKEN.exec(subject);
+  if (aliasCommandNoToken) {
+    return unsupportedTokenHint();
+  }
+  if (/^\/pay\s+0x/i.test(subject)) {
+    return {
+      kind: "failure",
+      reason: "Invalid wallet address.",
+      hint: "Use /pay <address> <amount> USDC with a full 0x address, or /pay <alias> <amount> USDC with a saved recipient alias.",
+    };
   }
 
   const judgePay = new RegExp(`^\\/judgepay\\s+${ADDRESS}\\s+${AMOUNT}\\s+${TOKEN}\\s*$`, "i").exec(subject);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { MemoryRepository } from "../../src/server/db/memory-repository.ts";
@@ -367,6 +368,116 @@ describe("community payment requests", () => {
       { repo },
     );
     assert.match(reply.text, /per-transaction limit/);
+  });
+});
+
+describe("slash alias community payouts (/pay <alias> <amount> USDC)", () => {
+  it("creates a pending_approval payout resolving the alias to its wallet", async () => {
+    const repo = new MemoryRepository();
+    await handleWorkspaceInit({ user: groupUser(OWNER, 1), allowedDevUserIds: DEV_OPERATORS }, { repo });
+    await handleMemberAdd({ user: groupUser(OWNER, 2), targetUserId: MEMBER, role: "member" }, { repo });
+    await handleRecipientAdd({ user: groupUser(OWNER, 3), alias: "blossom", address: ADDRESS }, { repo });
+
+    const parsed = parseInstruction("/pay blossom 0.01 USDC");
+    assert.equal(parsed.kind, "pay_alias");
+    if (parsed.kind !== "pay_alias") return;
+    const reply = await handleCommunityPayInstruction({ instruction: parsed, user: groupUser(MEMBER, 4) }, { repo });
+    assert.match(reply.text, /PAYMENT REQUEST/);
+    assert.match(reply.text, /ADDRESS\s+0x76d7a718/);
+    assert.match(reply.text, /APPROVAL\s+REQUIRED/);
+    assert.ok(reply.buttons, "expected approval buttons");
+
+    const payoutId = payoutIdFromReply(reply);
+    const payout = await repo.getPayoutById(payoutId);
+    assert.equal(payout?.status, "pending_approval");
+    assert.equal(payout?.source_type, "telegram_command");
+    const items = await repo.getPayoutItemsByPayoutId(payoutId);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].recipient_address, NORMALIZED);
+    assert.equal(items[0].status, "pending_approval");
+    // No execution attempt and no KeeperHub interaction at request time.
+    assert.equal(repo.executionAttempts.size, 0);
+  });
+
+  it("an unknown alias returns helpful add-recipient guidance", async () => {
+    const repo = new MemoryRepository();
+    await handleWorkspaceInit({ user: groupUser(OWNER, 1), allowedDevUserIds: DEV_OPERATORS }, { repo });
+    await handleMemberAdd({ user: groupUser(OWNER, 2), targetUserId: MEMBER, role: "member" }, { repo });
+
+    const parsed = parseInstruction("/pay unknown_alias 0.01 USDC");
+    assert.equal(parsed.kind, "pay_alias");
+    if (parsed.kind !== "pay_alias") return;
+    const reply = await handleCommunityPayInstruction({ instruction: parsed, user: groupUser(MEMBER, 3) }, { repo });
+    assert.match(reply.text, /Unknown recipient "unknown_alias"/);
+    assert.match(reply.text, /\/recipient add unknown_alias/);
+    assert.equal(repo.payouts.size, 0, "unknown alias must not create a payout");
+  });
+
+  it("a non-member cannot use alias pay", async () => {
+    const repo = new MemoryRepository();
+    await handleWorkspaceInit({ user: groupUser(OWNER, 1), allowedDevUserIds: DEV_OPERATORS }, { repo });
+    await handleRecipientAdd({ user: groupUser(OWNER, 2), alias: "blossom", address: ADDRESS }, { repo });
+
+    const parsed = parseInstruction("/pay blossom 0.01 USDC");
+    assert.equal(parsed.kind, "pay_alias");
+    if (parsed.kind !== "pay_alias") return;
+    const reply = await handleCommunityPayInstruction({ instruction: parsed, user: groupUser(OTHER, 3) }, { repo });
+    assert.match(reply.text, /not a member/);
+    assert.equal(repo.payouts.size, 0);
+  });
+
+  it("private-chat alias pay is intercepted at the bot layer, never pretending the alias exists", () => {
+    // The bot replies to every group-only command in DMs with the same
+    // message; aliases are workspace-scoped and must not resolve in DMs.
+    const bot = readFileSync(new URL("../../src/server/telegram/bot.ts", import.meta.url), "utf8");
+    assert.match(bot, /"This command only works inside an initialized group workspace\."/);
+    assert.ok(bot.includes('parsed.kind === "pay_alias"'), "pay_alias must be in the group-only private-chat list");
+  });
+
+  it("self-approval stays blocked for an alias requester who is an approver", async () => {
+    const repo = new MemoryRepository();
+    await handleWorkspaceInit({ user: groupUser(OWNER, 1), allowedDevUserIds: DEV_OPERATORS }, { repo });
+    await handleMemberAdd({ user: groupUser(OWNER, 2), targetUserId: APPROVER, role: "approver" }, { repo });
+    await handleRecipientAdd({ user: groupUser(OWNER, 3), alias: "blossom", address: ADDRESS }, { repo });
+
+    const parsed = parseInstruction("/pay blossom 0.01 USDC");
+    assert.equal(parsed.kind, "pay_alias");
+    if (parsed.kind !== "pay_alias") return;
+    const request = await handleCommunityPayInstruction(
+      { instruction: parsed, user: groupUser(APPROVER, 4) },
+      { repo },
+    );
+    const payoutId = payoutIdFromReply(request);
+    const gateway = new FakeGateway({});
+    const result = await handleApprovalCallback(
+      { action: "approve", payoutId, actorUserId: APPROVER, chatId: CHAT },
+      { repo, gateway },
+    );
+    assert.equal(result.answer, "A different treasury approver must approve this request.");
+    assert.equal(gateway.executeCalls, 0);
+  });
+
+  it("wallet /pay continues to work alongside alias /pay", async () => {
+    const repo = new MemoryRepository();
+    await handleWorkspaceInit({ user: groupUser(OWNER, 1), allowedDevUserIds: DEV_OPERATORS }, { repo });
+    await handleMemberAdd({ user: groupUser(OWNER, 2), targetUserId: MEMBER, role: "member" }, { repo });
+    await handleRecipientAdd({ user: groupUser(OWNER, 3), alias: "blossom", address: ADDRESS }, { repo });
+
+    const walletParsed = parseInstruction(`/pay ${ADDRESS} 0.01 USDC`);
+    assert.equal(walletParsed.kind, "pay");
+    const walletReply = await handleCommunityPayInstruction(
+      { instruction: walletParsed, user: groupUser(MEMBER, 4) },
+      { repo },
+    );
+    assert.match(walletReply.text, /ADDRESS\s+0x76d7a718/);
+    const aliasParsed = parseInstruction("/pay blossom 0.01 USDC");
+    assert.equal(aliasParsed.kind, "pay_alias");
+    const aliasReply = await handleCommunityPayInstruction(
+      { instruction: aliasParsed, user: groupUser(MEMBER, 5) },
+      { repo },
+    );
+    assert.match(aliasReply.text, /ADDRESS\s+0x76d7a718/);
+    assert.equal(repo.executionAttempts.size, 0, "no execution attempt from either request");
   });
 });
 

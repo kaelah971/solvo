@@ -27,6 +27,48 @@ describe("parseInstruction", () => {
     assert.equal(result.kind, "failure");
   });
 
+  it("parses a slash alias payment: /pay <alias> <amount> USDC", () => {
+    const result = parseInstruction("/pay blossom 0.01 USDC");
+    assert.equal(result.kind, "pay_alias");
+    if (result.kind === "pay_alias") {
+      assert.equal(result.alias, "blossom");
+      assert.equal(result.amount, "0.01");
+      assert.equal(result.token, "USDC");
+      assert.equal(result.sourceType, "telegram_command");
+    }
+  });
+
+  it("parses the addressed alias form /pay@SolvoAgentBot <alias> <amount> USDC", () => {
+    const opts = { botUsername: "SolvoAgentBot" };
+    const result = parseInstruction("/pay@SolvoAgentBot blossom 0.01 USDC", opts);
+    assert.equal(result.kind, "pay_alias");
+    if (result.kind === "pay_alias") {
+      assert.equal(result.alias, "blossom");
+      assert.equal(result.amount, "0.01");
+    }
+  });
+
+  it("accepts mixed-case aliases and lowercase tokens in slash alias pay", () => {
+    const upper = parseInstruction("/pay Blossom 0.01 USDC");
+    assert.equal(upper.kind, "pay_alias");
+    if (upper.kind === "pay_alias") assert.equal(upper.alias, "Blossom");
+    const lowerToken = parseInstruction("/pay blossom 0.01 usdc");
+    assert.equal(lowerToken.kind, "pay_alias");
+  });
+
+  it("rejects slash alias pay with a missing or unsupported token", () => {
+    const missing = parseInstruction("/pay blossom 0.01");
+    assert.equal(missing.kind, "failure");
+    const eth = parseInstruction("/pay blossom 0.01 ETH");
+    assert.equal(eth.kind, "failure");
+  });
+
+  it("never treats an address as an alias in slash pay", () => {
+    const result = parseInstruction(`/pay ${ADDRESS} 0.01 USDC`);
+    assert.equal(result.kind, "pay");
+    if (result.kind === "pay") assert.equal(result.address, ADDRESS);
+  });
+
   it("rejects zero and negative amounts", () => {
     const zero = parseInstruction(`/pay ${ADDRESS} 0 USDC`);
     assert.equal(zero.kind, "pay");

@@ -25,7 +25,7 @@ export type PayAliasInstruction = {
   alias: string;
   amount: string;
   token: "USDC";
-  sourceType: "telegram_natural_language";
+  sourceType: "telegram_command" | "telegram_natural_language";
 };
 
 export type BatchInstruction = {
