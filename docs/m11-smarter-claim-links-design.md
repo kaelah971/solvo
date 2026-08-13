@@ -2,7 +2,7 @@
 
 Date: 2026-08-13
 Branch: `feature/smarter-claim-links`
-Status: **Design + M11.2–M11.5 implemented (read model, Telegram UX, web UX, expiry/reissue rules).**
+Status: **M11.2–M11.5 implemented; M11.6 batch design complete (design only, not shipped).**
 
 ## M11.5 expiry/reissue rules (implemented)
 
@@ -310,23 +310,25 @@ used / waiting-approval / executing / completed / cancelled):
 
 ## 8. Claim-link batch position
 
-M11 designs (does NOT implement) the batch surface:
+**M11.6 designs (does NOT implement) the batch surface — see
+[`docs/m11.6-claim-link-batches-design.md`](./m11.6-claim-link-batches-design.md)
+for the full design** (v1 grammar, deferred scope, authority boundary,
+persistence, Telegram UX, duplicate behavior, status summary, M10
+interaction, limits, 50-item test matrix, M11.7–M11.12 implementation plan,
+risk register).
 
-- `create 3 claim links of 0.01 USDC each` → N independent claim links,
-  each with its own token/idempotency key; all-or-clarify.
-- `create claim links for three winners` → unresolved names → N claim links
-  (this is the batch generalization of the existing single
-  `recipient_unresolved` fallback).
-- `turn unresolved batch recipients into claim links` → M10 batches that
-  clarify on unresolved recipients could, in a later slice, convert those
-  legs to claim links instead — explicitly deferred (no mixed decisions in
-  M10 v1).
+Design summary:
 
-**Recommendation: design in M11.6, implement after single-claim status UX is
-hardened and gated.** Implementation would reuse the existing
-`createClaimLink`/`createClaim` idempotency shape with per-link keys
-(`…:claim:<n>`), one claim row per recipient, and the existing approval
-pipeline per claim.
+- v1 grammar = **count-based uniform** (`create 3 claim links of 0.01 USDC
+  each`) + **named uniform** (`create claim links for blossom and endurance,
+  0.01 USDC each`, names are LABELS only — never resolved wallets).
+- N independent `claim_links` rows, no new table/migration; per-link
+  idempotency keys `ag:<run.idempotency_key>:claim:<n>`; batch linkage via
+  audit metadata (deterministic batch id).
+- Max 10 links; per-link = workspace per-tx limit; total checked at creation;
+  all-or-clarify; no mixed M10 payout + claim batches; tokens shown once.
+- `three winners`-style count-only nouns (G3) and per-claim different amounts
+  (G4) are designed but deferred.
 
 ## 9. Test matrix (to implement in M11.2+)
 
@@ -415,14 +417,29 @@ contract. Concrete checks (≥ 40):
 - **M11.5 — expiry/reissue rules:** expiry visibility everywhere; reissue =
   new claim design contract enforced by tests (items 42–46). ✅ DONE (service
   + tests; Telegram/web reissue command wiring deferred)
-- **M11.6 — per-recipient claim-link batch DESIGN** (doc + corpus
-  expectations only, no implementation): all-or-clarify semantics, per-link
-  idempotency keys, N claim rows.
-- **M11.7 — adversarial/truthfulness gate:** hostile claim mutations,
-  forged-run immunity, source contracts (items 35–41, 47–52).
-- **M11.8 — docs/roadmap final gate:** README roadmap, M9/M10 doc
-  cross-references, full gate (`npm test`, `test:db`, lint, tsc, build,
-  read-only doctors).
+- **M11.6 — per-recipient claim-link batch DESIGN** — ✅ DONE
+  (`docs/m11.6-claim-link-batches-design.md`): all-or-clarify semantics,
+  per-link idempotency keys, N claim rows, 50-item test matrix, M11.7–M11.12
+  slice plan. No production behavior implemented.
+- **M11.7 — batch claim-link grammar/corpus baseline:** add the batch-claim
+  corpus with CURRENT expectations (clarification/unsupported, zero
+  artifacts) — locks "no batch yet" before any parsing (mirrors M10.2).
+- **M11.8 — batch parser/planner:** deterministic G1/G2 parsing (count/label
+  lists, uniform amounts), duplicate-label rejection, `prepared_claim_link_batch`
+  planner decision, all-or-clarify + policy checks. No persistence yet.
+- **M11.9 — batch bridge/persistence:** N `claim_links` rows via the
+  single-claim transaction shape, per-link keys `ag:<run.key>:claim:<n>`,
+  batch id in audit metadata, N raw tokens returned once. No schema change.
+- **M11.10 — Telegram reply/copy + duplicate behavior:** batch reply
+  builders (created + already-created, no token re-show), routing precedence,
+  per-link status summary aggregation.
+- **M11.11 — adversarial/truthfulness gate (renumbered from M11.7):**
+  hostile batch claim mutations, forged-run immunity, source contracts
+  (items 35–41, 47–52), no-token-reveal on duplicates, corpus flips in the
+  same commit as M11.9/M11.10.
+- **M11.12 — docs/roadmap final gate (renumbered from M11.8):** README
+  roadmap, M9/M10 doc cross-references, full gate (`npm test`, `test:db`,
+  lint, tsc, build, read-only doctors).
 
 Each task ends with lint + `tsc --noEmit` + the task's test files green.
 
