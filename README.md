@@ -53,6 +53,12 @@ No secrets appear in this repository.
   amounts; one `pending_approval` payout + N payout_items; idempotent
   duplicate delivery; no funds move until owner/approver approval; KeeperHub
   execution only after approval through the existing execution pipeline)
+- M11 smarter claim links (claim status read model; `/claimstatus <id>` +
+  natural-language claim status phrases; web claim state UX for
+  pending/claimed/expired/rejected/approved/completed/unavailable; expiry
+  visibility; reissue service — reissue creates a NEW claim row + new token,
+  the old claim is never resurrected; no-leak same-workspace/member gate;
+  pipeline-only proof; adversarial/truthfulness hardening)
 
 **M8 S3 shipped scope (exactly what is implemented and tested):**
 
@@ -99,6 +105,32 @@ No secrets appear in this repository.
   auto-approval, or direct execution from natural language — all remain
   declined or clarified with zero artifacts
 
+**M11 shipped scope (exactly what is implemented and tested):**
+
+- claim status read model (`getClaimStatusForMember`, effective statuses
+  pending/claimed/approved/rejected/expired/completed/unknown, computed
+  expiry, same-workspace active-member gate, generic no-leak output)
+- `/claimstatus <claim-id>` Telegram command + natural-language claim status
+  phrases (`check claim <id>`, `what happened to claim <id>`, …) — read-only,
+  no raw token/hash ever shown
+- web claim state UX on `/claim/[token]`: valid, already-claimed, expired,
+  rejected, approved/payment-prepared, completed (proof only from the payout
+  pipeline), not-confirmed, and unavailable — wallet submit records the
+  destination only
+- expiry visibility everywhere (expired is computed, never stored; expired
+  claims cannot be claimed or approved)
+- reissue service (`reissueClaimLink`): creates a NEW claim row + new token;
+  the old claim is never resurrected and its token stays unusable; no
+  payout/approval/execution during reissue
+- pipeline-only proof: completion + tx hashes come only from the payout
+  pipeline, never from claim rows or agent_runs (forged-run/forged-metadata
+  immunity tested)
+- adversarial/truthfulness hardening: hostile claim phrases decline with zero
+  artifacts; no-leak, no-token-reveal, and banned-term contracts locked
+- not shipped: claim-link batches, CSV/bulk claim links, Judge Mode claim
+  links, auto-approval, direct execution from claim entry, raw-token
+  re-display, or claim destination editing — all remain declined or deferred
+
 ### In progress
 
 - M8 final integration/review (S3 slice gate complete)
@@ -107,16 +139,15 @@ No secrets appear in this repository.
 
 ### Next
 
-- M11 smarter claim links
 - M12 web admin dashboard
 - M13 retry/recovery console
+- M14 KeeperHub workflow companion
+- M15 x402/paid workflow surface
 
 ### Later
 
 Deferred/optional:
 
-- KeeperHub workflow companion
-- x402 paid workflow/report surface
 - richer model provider support
 - public sandbox/community testing
 - claim-link batches / bulk claim links (designed in

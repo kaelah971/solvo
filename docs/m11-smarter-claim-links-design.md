@@ -2,7 +2,11 @@
 
 Date: 2026-08-13
 Branch: `feature/smarter-claim-links`
-Status: **M11.2–M11.5 implemented; M11.6 batch design complete (design only, not shipped).**
+Status: **COMPLETE — SHIPPED** (M11.2 read model → M11.3 Telegram status UX →
+M11.4 web claim UX → M11.5 expiry/reissue rules → M11.6 batch design →
+M11.7 adversarial/truthfulness gate → M11.8 docs/roadmap final gate).
+Claim-link batch IMPLEMENTATION is explicitly deferred beyond M11 (design
+only).
 
 ## M11.5 expiry/reissue rules (implemented)
 
@@ -484,3 +488,63 @@ Each task ends with lint + `tsc --noEmit` + the task's test files green.
 | Judge Mode reachable via claim status | Claim status is community-only; judge claims stay command-only |
 | Mutation bypass on claim verbs | M11.7 hostile-mutation gate (same machinery as M10.7) |
 | Batch phrase misparses as a single claim | `batch_claim_links` unsafe flag; declines with "Claim-link batches are not supported yet" (locked by tests) |
+
+## M11.8 final gate
+
+**Shipped scope (exactly what is implemented and tested):**
+
+1. **Claim status read model** — `src/server/claim/status.ts`: effective
+   statuses `pending/claimed/approved/rejected/expired/completed/unknown`,
+   computed expiry (never persisted), pipeline-only proof, same-workspace
+   active-member gate, generic no-leak output; deterministic JSON-safe views
+   with masked wallets and no token material.
+2. **Telegram claim status UX** — `/claimstatus <claim-id>` + NL phrases
+   (`check claim <id>`, `what happened to claim <id>`, `is claim <id> …`):
+   read-only, per-state copy, no-leak unavailable reply, no raw tokens.
+3. **Web claim state UX** — `/claim/[token]` renders
+   valid/claimed/expired/rejected/approved/not-confirmed/completed/unavailable
+   panels; proof (TX + BaseScan) only from the payout pipeline; wallet submit
+   records the destination only.
+4. **Expiry visibility** — expired computed from `expires_at` vs now; expired
+   claims cannot be claimed or approved; claimed/approved/completed claims
+   keep their state past the deadline.
+5. **Reissue service** — `src/server/claim/reissue.ts`: new claim row + new
+   token + new expiry; old claim never resurrected; old token stays unusable;
+   no payout/approval/execution during reissue; owner/approver + same-
+   workspace gate with generic denial.
+6. **Adversarial/truthfulness hardening** — hostile claim phrases and state
+   attacks decline with zero artifacts; forged agent_runs and forged claim
+   metadata cannot create proof; no-token-reveal, banned-term, and
+   source-contract contracts locked (`tests/security/claim-link-truthfulness.test.ts`).
+
+**Deferred scope (NOT shipped in M11):**
+
+- claim-link batches (designed in `docs/m11.6-claim-link-batches-design.md`;
+  implementation deferred to a later roadmap milestone — batch-signal
+  phrases decline with zero artifacts)
+- CSV/bulk claim links
+- unresolved M10 batch legs → claim links
+- Judge Mode claim links
+- auto-approval / direct execution from claim entry
+- raw-token re-display; claim destination editing
+- Telegram/web reissue command wiring (the reissue SERVICE ships; no command
+  surface yet)
+
+**Migration note:** `migrations/0013_claim_reissue.sql` (adds
+`claim_reissued` to `solvo_audit_event_type`) EXISTS but was NOT applied by
+any gate run. It must be applied (`npm run db:migrate`) before the reissue
+service records audits against a live database. No migration was applied
+during the M11 gates.
+
+**Safety guarantees:** no payment, payout, approval, execution, KeeperHub
+call, or model call is made by any M11 surface. Claim status, web states,
+and reissue are read-only or claim-row-creating only; execution remains the
+exclusive authority of the existing human-approval + payout pipeline.
+No payments were executed during the M11 gates.
+
+**Final validation (M11.8):** full suite `npm test` green (1255 tests),
+`npm run test:db` green, `npm run lint` (0 errors), `npx tsc --noEmit`
+clean, `npm run build` green, `npm run telegram:doctor` and
+`npm run judge:doctor` ready (read-only). No live OpenAI/API calls, no
+KeeperHub execution, no payments, no webhook mutations, no migration
+application.
