@@ -317,7 +317,10 @@ describe("M12.11 dashboard security gate — source contracts", () => {
       assert.equal(source.includes("telegramUserId"), false, `${file} leaks telegram ids`);
     }
     const logout = readFileSync("src/app/auth/logout/route.ts", "utf8");
-    assert.match(logout, /maxAge: 0/, "logout must clear the session cookie");
+    assert.match(logout, /buildDashboardSessionClearAttributes/, "logout must use the shared clear-cookie attributes");
+    const sessionSeam = readFileSync("src/server/dashboard/session.ts", "utf8");
+    assert.match(sessionSeam, /maxAge: 0/, "the clear-cookie helper must expire the session cookie");
+    assert.match(sessionSeam, /sameSite: "lax"/, "clear attributes must mirror the issued Lax cookie");
   });
 
   it("9-11, 14. the Telegram /dashboard flow is identity-only and only logs safe booleans", () => {

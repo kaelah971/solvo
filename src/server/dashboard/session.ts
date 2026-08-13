@@ -159,6 +159,25 @@ export function buildDashboardSessionCookie(
 }
 
 /**
+ * Clear-cookie attributes for sign-out. MUST mirror the issued cookie exactly
+ * (same name/path/SameSite/Secure) — an attribute mismatch (e.g. clearing
+ * with SameSite=Strict a cookie that was issued SameSite=Lax) can make
+ * browsers fail to delete the session cookie, leaving the user authenticated
+ * after sign-out.
+ */
+export function buildDashboardSessionClearAttributes(input: {
+  secureCookie: boolean;
+}): DashboardSessionCookie["attributes"] {
+  return {
+    httpOnly: true,
+    secure: input.secureCookie,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  };
+}
+
+/**
  * Safe per-request session diagnostic for /app pages. Logs ONLY booleans and
  * the role — never the cookie value, signature, workspace ids, user ids, or
  * any secret.
