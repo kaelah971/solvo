@@ -143,6 +143,8 @@ export type ListClaimLinksOptions = DashboardListOptions & {
 
 export type ListAuditEventsOptions = DashboardListOptions & {
   payoutId?: string;
+  /** Batch filter by payout ids (used by dashboard list pages). */
+  payoutIds?: string[];
   actorId?: string;
   eventType?: string;
   /** Matches audit metadata `claimId` (claim events store it there). */

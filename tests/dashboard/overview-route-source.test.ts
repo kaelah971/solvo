@@ -82,14 +82,17 @@ describe("/app overview route source contract", () => {
 
   it("unavailable copy directs operators to /dashboard with no ids", () => {
     const page = readFileSync("src/app/app/page.tsx", "utf8");
-    assert.match(page, /WORKSPACE DASHBOARD UNAVAILABLE/);
-    assert.match(page, /type \/dashboard/);
-    const unavailable = page.match(/function DashboardUnavailable\(\) \{[\s\S]*?\n\}/)?.[0] ?? "";
-    assert.equal(unavailable.includes("overview"), false, "unavailable screen must not render overview data");
-    assert.equal(unavailable.includes("workspaceId"), false);
-    assert.equal(unavailable.includes("claimId"), false);
-    assert.equal(unavailable.includes("payoutId"), false);
-    assert.equal(unavailable.includes("memberId"), false);
+    const panels = readFileSync("src/components/DashboardPanels.tsx", "utf8");
+    assert.match(panels, /WORKSPACE DASHBOARD UNAVAILABLE/);
+    assert.match(panels, /type \/dashboard/);
+    // The unavailable panel accepts no data, so nothing can leak into it.
+    assert.match(panels, /function DashboardUnavailable\(\)/);
+    assert.equal(panels.includes("workspaceId"), false);
+    assert.equal(panels.includes("claimId"), false);
+    assert.equal(panels.includes("payoutId"), false);
+    assert.equal(panels.includes("memberId"), false);
+    // Every denied path in the page renders the same shared panel.
+    assert.match(page, /<DashboardUnavailable \/>/);
   });
 
   it("every denied path renders the same unavailable screen", () => {

@@ -343,6 +343,7 @@ export class MemoryRepository implements SolvoRepository {
     return [...this.auditEvents]
       .filter((event) => event.workspace_id === workspaceId)
       .filter((event) => options.payoutId === undefined || event.payout_id === options.payoutId)
+      .filter((event) => options.payoutIds === undefined || (event.payout_id !== null && options.payoutIds.includes(event.payout_id)))
       .filter((event) => options.actorId === undefined || event.actor_id === options.actorId)
       .filter((event) => options.eventType === undefined || event.event_type === options.eventType)
       .filter((event) => options.claimId === undefined || event.metadata.claimId === options.claimId)

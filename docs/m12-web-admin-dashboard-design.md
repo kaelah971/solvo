@@ -3,9 +3,69 @@
 Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
 Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
-login bridge implemented.** The operator console is specified; the read-model
-layer, the `/app` overview, and the Telegram → web dashboard login flow ship.
-No admin actions exist yet, and no migrations were applied.
+login bridge + M12.5 payout/batch pages implemented.** The operator console is
+specified; read models, the `/app` overview, the Telegram → web login flow,
+and the payout/batch pages ship. No admin actions exist yet, and no
+migrations were applied.
+
+## M12.5 payout and batch pages (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.4):
+
+- **Routes added**: `/app/payouts`, `/app/payouts/[id]`, `/app/batches`,
+  `/app/batches/[id]` — all server-rendered (`force-dynamic`), read-only, and
+  gated by the M12.3/M12.4 session flow (signed cookie → repo re-check of
+  ACTIVE same-workspace membership → gated page model). The dashboard shell
+  nav now links Overview / Payouts / Batches (+ Sign out); no links exist for
+  unimplemented sections.
+- **Shared page plumbing**: `src/server/dashboard/page-gate.ts`
+  (`resolveDashboardPageGate` reads the signed cookie + clock for one
+  request) and `src/components/DashboardPanels.tsx` — `DashboardUnavailable`
+  (the one no-leak screen for no session / inactive / non-member / no
+  workspace / no DB) and `DashboardNotFound` (the one no-leak screen for
+  unknown or cross-workspace payout/batch ids; identical copy for every id).
+- **Payout list** (`src/server/dashboard/payouts-page.ts`): workspace-scoped
+  rows with short display id, safe source labels (Telegram payment /
+  Natural-language payment / Batch payout / Claim link / Judge mode /
+  safe fallback), state label, requester label, decision summary (only from
+  `approval_granted`/`approval_rejected` audit events, batched via a new
+  `payoutIds` audit filter), total, item count, timestamps, and a truthful
+  proof-status chip (`payoutProofStatus`): Completed with proof (EVERY item
+  completed + payout completed + every completed item has a tx hash) /
+  Completed without visible proof / Pending approval / Approved but not
+  executed / Executing / Failed or unknown / Cancelled / Partially
+  completed. Honest empty state: "No payout requests yet."
+- **Payout detail**: summary grid (status, requester, decision, total, items,
+  created/approved/completed), item table (recipient full for owner/approver,
+  masked for members, amount, state, safe memo — claim memos hidden, proof
+  link ONLY when a completed item carries a pipeline tx hash), audit
+  timeline, and truth copy: "Approved does not mean executed." /
+  "Completed proof appears only when the execution pipeline recorded a
+  transaction."
+- **Batch list**: batch sources only (`telegram_batch`/`batch_csv`), with
+  per-batch completed/pending/failed counts derived from item pipeline
+  states and the same proof chips. Empty state: "No batch payouts yet."
+- **Batch detail**: batch summary grid, per-recipient table with per-item
+  state + proof only where a completed leg has a hash, audit timeline, no
+  approve/reject/retry controls. Non-batch and unknown/cross-workspace ids
+  render the generic not-found panel.
+- **Truthfulness/security preserved**: no KeeperHub/MCP/execution-writer/
+  Telegram-webhook/model-provider/fetch imports in any page or page model
+  (source-contract tested); no raw token/hash/prefix, provider JSON, raw
+  KeeperHub status, simulation results, or execution ids anywhere; no fake
+  tx hashes (proof guards `item.txHash !== null`); no cross-workspace data;
+  no admin action buttons.
+- **Tests** (+28): page-model tests for gating (owner/approver/member render,
+  nonmember/inactive identical unavailable), workspace scoping, honest empty
+  states, proof chips (incl. "completed without hash never shows proof"),
+  source labels, decision-from-audit, item states/amounts, member masking,
+  safe audit timelines, batch-only lists, batch detail rejection of non-batch
+  ids, per-item proof only where present, JSON-serializability; route
+  source-contract tests (forbidden imports, truthful copy, empty states, no
+  action controls, banned terms, proof guards, shell nav, generic not-found
+  panel). Overview-route-source updated for the shared panels.
+- **No actions/execution**: all pages read-only; no migrations applied during
+  the M12.5 gates.
 
 ## M12.4 Telegram dashboard login bridge (implemented)
 

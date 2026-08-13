@@ -478,6 +478,9 @@ export class PostgresRepository implements SolvoRepository {
     const limit = clampDashboardLimit(options.limit);
     const where = whereFragment(this.sql, this.sql`workspace_id = ${workspaceId}`);
     if (options.payoutId !== undefined) where.append(this.sql` AND payout_id = ${options.payoutId}`);
+    if (options.payoutIds !== undefined) {
+      where.append(this.sql` AND payout_id = ANY(${options.payoutIds})`);
+    }
     if (options.actorId !== undefined) where.append(this.sql` AND actor_id = ${options.actorId}`);
     if (options.eventType !== undefined) where.append(this.sql` AND event_type = ${options.eventType}`);
     if (options.claimId !== undefined) where.append(this.sql` AND metadata->>'claimId' = ${options.claimId}`);

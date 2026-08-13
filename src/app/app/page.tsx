@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 
-import { StatePanel } from "@/components/StatePanel";
 import { SectionLabel } from "@/components/SectionLabel";
+import { DashboardUnavailable } from "@/components/DashboardPanels";
 import { getDbRepository } from "@/server/db/accessor";
-import { getDashboardCookieSecret, getDashboardSessionFromHeaders, requireDashboardContext } from "@/server/dashboard/session";
+import { requireDashboardContext } from "@/server/dashboard/session";
+import { resolveDashboardPageGate } from "@/server/dashboard/page-gate";
 import {
   agentRunDecisionLabel,
   agentRunStatusLabel,
@@ -33,37 +34,17 @@ export const dynamic = "force-dynamic";
  * nothing on this page approves or executes.
  */
 export default async function OverviewPage() {
-  const secret = getDashboardCookieSecret();
-  const session = secret !== null ? getDashboardSessionFromHeaders(await headers(), secret) : null;
+  const gate = resolveDashboardPageGate(await headers());
   const repo = getDbRepository();
-  if (repo === null) return <DashboardUnavailable />;
+  if (repo === null || gate.secret === null) return <DashboardUnavailable />;
 
-  const required = await requireDashboardContext({ repo, session, nowIso: new Date().toISOString() });
+  const required = await requireDashboardContext({ repo, session: gate.session, nowIso: gate.nowIso });
   if (!required.ok) return <DashboardUnavailable />;
 
   const model = await buildOverviewPageModel(repo, required.ctx);
   if (!model.ok) return <DashboardUnavailable />;
 
   return <OverviewDashboard model={model} />;
-}
-
-function DashboardUnavailable() {
-  return (
-    <div className="site-substrate min-h-screen">
-      <div className="site-inner mx-auto w-full max-w-6xl px-6 py-12 md:py-16">
-        <StatePanel
-          badge="WORKSPACE DASHBOARD UNAVAILABLE"
-          tone="error"
-          headline="Workspace dashboard unavailable."
-          body="Open Telegram and type /dashboard to access your workspace dashboard."
-        >
-          <p className="mt-4 max-w-xl text-[12px] leading-[1.5] tracking-[0.06em] text-muted">
-            The dashboard shows no operational data until a verified workspace member opens it.
-          </p>
-        </StatePanel>
-      </div>
-    </div>
-  );
 }
 
 function OverviewDashboard({ model }: { model: Extract<OverviewPageModel, { ok: true }> }) {
