@@ -32,6 +32,162 @@ npm run judge:doctor      # judge readiness (no payments)
 
 No secrets appear in this repository.
 
+## Table of Contents
+
+- [Quickstart for judges and community admins](#quickstart-for-judges-and-community-admins)
+- [Telegram setup](#2-telegram-setup)
+- [Workspace setup](#4-telegram-workspace-setup)
+- [Members and approvers](#5-add-members-and-approvers)
+- [Recipient aliases](#6-add-recipient-aliases-and-wallets)
+- [Payouts](#7-request-a-payout)
+- [Dashboard](#8-dashboard-access)
+- [KeeperHub surfaces](#3-keeperhub-surfaces-used)
+- [Production setup](#11-production-setup-notes)
+
+## Quickstart for judges and community admins
+
+### 1. Open Solvo
+
+- **Website:** https://solvo-beryl.vercel.app
+- **Telegram bot:** https://t.me/SolvoAgentBot
+- **GitHub:** https://github.com/kaelah971/solvo
+
+### 2. Add Solvo to a Telegram group
+
+1. Open the Telegram group where the community/team coordinates payouts.
+2. Tap the group name at the top of the chat.
+3. Choose **Add Members / Add Users**.
+4. Search for `@SolvoAgentBot`.
+5. Add the bot to the group.
+6. Make sure the bot can read messages/commands in the group.
+7. If Telegram asks for permissions, allow the bot to receive commands.
+
+> Solvo community workspace commands are meant to be used **inside the
+> group**, not in a private DM.
+
+### 3. Initialize the workspace
+
+```
+/workspace init
+```
+
+- Run this in the Telegram group.
+- The initializer becomes the workspace owner if allowed by configuration.
+- Production deployments may restrict workspace initialization with
+  `TELEGRAM_ALLOWED_DEV_USER_IDS`.
+
+### 4. Add team members
+
+```
+/member add <telegram_numeric_user_id> member
+/member list
+```
+
+- Use Telegram **numeric user IDs**, not `@usernames`.
+- Members can request payouts.
+- Members cannot approve their own payout.
+
+### 5. Add approvers
+
+```
+/member add <telegram_numeric_user_id> approver
+/member list
+```
+
+- Approvers can approve eligible pending requests.
+- The requester cannot approve their own payout.
+- This preserves separation of duty.
+
+### 6. Add recipient aliases and wallets
+
+```
+/recipient add blossom 0x85522bdE267d05bf8CE8813F97c75417b7894A33
+/recipient list
+```
+
+- Aliases are **workspace-scoped**.
+- The alias must be added before `/pay blossom` works.
+- Aliases are **not Telegram usernames**.
+- Saving a recipient does not move funds.
+
+### 7. Request a payout
+
+```
+/pay blossom 0.01 USDC
+```
+
+or:
+
+```
+/pay 0x76D7a718CcDc1c132c52D4C05eA0c2FA8e657486 0.01 USDC
+```
+
+- In a community group, `/pay` creates a **pending approval request** — it
+  does **not** execute immediately.
+- Another eligible approver must approve.
+- Solvo currently supports **Base mainnet USDC only**.
+
+### 8. Use addressed commands when the group has many bots
+
+**If your Telegram group already has multiple bots, use Solvo-addressed
+commands so Telegram routes the command clearly to Solvo:**
+
+```
+/pay@SolvoAgentBot blossom 0.01 USDC
+/dashboard@SolvoAgentBot
+/recipient@SolvoAgentBot list
+/member@SolvoAgentBot list
+/workspace@SolvoAgentBot init
+```
+
+**The normal commands also work when there is no bot-command conflict:**
+
+```
+/pay blossom 0.01 USDC
+/dashboard
+/recipient list
+/member list
+```
+
+### 9. Approve and prove
+
+- An eligible approver approves the pending request from Telegram.
+- Solvo submits approved Base USDC execution through the **KeeperHub MCP**.
+- Solvo stores execution status, the KeeperHub execution ID, the tx hash when
+  available, and proof/audit events.
+- **Completed** means the execution pipeline recorded proof.
+- **Prepared** does not mean paid.
+- **Approved** does not mean executed.
+
+### 10. Open the dashboard
+
+```
+/dashboard
+```
+
+or:
+
+```
+/dashboard@SolvoAgentBot
+```
+
+- Active workspace members receive a short-lived **one-time dashboard link**.
+- The dashboard is **read-only in M12**.
+- It shows overview, approvals, payouts, batches, claims, recipients, members,
+  policies, agent runs, and audit.
+- If a valid session is missing, no workspace data is shown.
+
+### 11. Optional public judge proof
+
+```
+/judgepay <wallet> 0.01 USDC
+```
+
+- This is the capped Judge Mode proof path.
+- Base mainnet USDC only.
+- One successful payment per user may be enforced depending on deployment
+  config.
+
 ## How to use Solvo
 
 ### 1. Supported network and asset
@@ -40,7 +196,27 @@ No secrets appear in this repository.
 - More chains and assets are future work; anything else is declined with a
   clear message.
 
-### 2. KeeperHub surfaces used
+### 2. Telegram setup
+
+Add `@SolvoAgentBot` to the group:
+
+1. Open the Telegram group where the community/team coordinates payouts.
+2. Tap the group name at the top of the chat.
+3. Choose **Add Members / Add Users**.
+4. Search for `@SolvoAgentBot`, add it, and allow it to receive commands.
+
+When the group has several bots, commands addressed to Solvo work exactly
+like the plain forms (bot-username matching is case-insensitive):
+
+```
+/workspace@SolvoAgentBot init
+/member@SolvoAgentBot list
+/recipient@SolvoAgentBot list
+/pay@SolvoAgentBot blossom 0.01 USDC
+/dashboard@SolvoAgentBot
+```
+
+### 3. KeeperHub surfaces used
 
 - **MCP** — the bot talks to KeeperHub through the MCP adapter.
 - **Direct KeeperHub execution through MCP** — execution happens only after
@@ -49,7 +225,7 @@ No secrets appear in this repository.
   recorded; proof (tx hashes) comes only from the execution pipeline.
 - **Not used in this version:** KeeperHub CLI, Workflow Builder, x402/MPP.
 
-### 3. Telegram workspace setup
+### 4. Telegram workspace setup
 
 In the Telegram group where the community coordinates payouts, run:
 
@@ -62,7 +238,7 @@ In the Telegram group where the community coordinates payouts, run:
   `TELEGRAM_ALLOWED_DEV_USER_IDS` (the authorized initializer allowlist).
 - Re-running it is idempotent — it returns the existing workspace.
 
-### 4. Add members and approvers
+### 5. Add members and approvers
 
 ```
 /member add <telegram_numeric_user_id> member
@@ -87,7 +263,7 @@ Notes:
 - If someone is not added as an active member, their group commands are
   unavailable or denied.
 
-### 5. Add recipient aliases and wallets
+### 6. Add recipient aliases and wallets
 
 ```
 /recipient add blossom 0x76D7a718CcDc1c132c52D4C05eA0c2FA8e657486
@@ -101,7 +277,7 @@ Notes:
 - Aliases are **not Telegram usernames**.
 - Saving a recipient does not move funds.
 
-### 6. Request a payout
+### 7. Request a payout
 
 ```
 /pay blossom 0.01 USDC
@@ -114,7 +290,7 @@ Notes:
 - Unknown alias? The bot replies: *Recipient alias not found. Add it with
   `/recipient add <alias> <wallet>`.*
 
-### 7. Dashboard access
+### 8. Dashboard access
 
 ```
 /dashboard
@@ -127,7 +303,7 @@ Notes:
   members, policies, agent runs, and audit.
 - Without a valid session it shows no workspace data.
 
-### 8. Claim links
+### 9. Claim links
 
 ```
 /claimpay 0.01 USDC
@@ -139,7 +315,7 @@ Notes:
 - **Wallet entered does not mean funds moved.**
 - Approval/execution are still required before anything moves.
 
-### 9. Judge Mode
+### 10. Judge Mode
 
 ```
 /judgepay <wallet> 0.01 USDC
@@ -149,7 +325,7 @@ Notes:
 - One successful payment per user is enforced when that config is enabled
   (`JUDGE_MAX_SUCCESSFUL_PAYMENTS_PER_USER`).
 
-### 10. Production setup notes
+### 11. Production setup notes
 
 Before live dashboard use, the two pending migrations must be applied:
 
