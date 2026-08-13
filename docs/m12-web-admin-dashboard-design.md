@@ -3,10 +3,84 @@
 Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
 Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
-login bridge + M12.5 payout/batch pages implemented.** The operator console is
-specified; read models, the `/app` overview, the Telegram → web login flow,
-and the payout/batch pages ship. No admin actions exist yet, and no
-migrations were applied.
+login bridge + M12.5 payout/batch pages + M12.6 claim pages implemented.**
+The operator console is specified; read models, the `/app` overview, the
+Telegram → web login flow, the payout/batch pages, and the claim pages ship.
+No admin actions exist yet, and no migrations were applied.
+
+## M12.6 claim pages (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.5):
+
+- **Routes added**: `/app/claims` (claim link directory) and
+  `/app/claims/[id]` (claim detail) — both server-rendered
+  (`force-dynamic`), read-only, and gated by the same M12.3/M12.4 session
+  flow (signed cookie → repo re-check of ACTIVE same-workspace membership →
+  gated page model). The dashboard shell nav now links
+  Overview / Payouts / Batches / Claims (+ Sign out); no links exist for
+  unimplemented sections.
+- **Read-only behavior**: no forms, buttons, server actions, or client
+  handlers anywhere on the claim pages. No reissue button/form/action exists.
+- **Workspace/session gate**: no session, unknown workspace, non-member,
+  inactive member, and no-DB all render the single generic
+  `DashboardUnavailable` panel. Unknown or cross-workspace claim ids render
+  the single generic `DashboardNotFound` panel (identical copy for every id —
+  no claim existence leak).
+- **Effective claim statuses** (M11.2 rules, `nowIso` injected): pending /
+  unclaimed, claimed (waiting approval), expired (computed — a `created`
+  claim past its deadline reads `expired`, never persisted), rejected /
+  cancelled, approved (payment prepared), completed (ONLY when the linked
+  payout pipeline has a completed item carrying a transaction hash),
+  not-confirmed / unknown (stored `executed` without pipeline proof). Claimed
+  claims stay claimed after expiry; approved never reads as paid; completed
+  never renders without pipeline proof.
+- **Masked wallet behavior**: claimed wallets render masked everywhere
+  (`0x76d7…7486`); no page reveals a full claimed destination (approvals
+  surface arrives in a later slice). List rows show "claimed · <masked>"
+  only when a wallet exists.
+- **Pipeline-only proof**: the detail page renders the TX hash + explorer
+  link ONLY when the M11.2 status view carries `txHash`/`txExplorerUrl`
+  (a completed pipeline item with a hash). Completed-without-hash and
+  not-confirmed claims show "No pipeline transaction proof to show." and
+  never render a hash.
+- **Reissue eligibility display only**: list rows and the detail page show
+  "Eligible to reissue" / "Not eligible to reissue" computed from the role
+  gate (active owner/approver) + M11.5 state gate (stored `created` incl.
+  computed expired, or `cancelled`), with the reason when ineligible. The
+  detail page's eligible state shows: "Reissue action will be enabled after
+  the claim reissue migration is applied and admin actions are wired." No
+  button, no form, no server action.
+- **No actions/execution**: the claim pages execute nothing, approve/
+  reject/retry nothing, and never call KeeperHub/execution services. No
+  migrations were applied during the M12.6 gates (0013/0014 remain
+  unapplied).
+- **Truthfulness copy** on the detail page: "Wallet entered does not mean
+  funds moved." / "Claim approval prepares a payment; it does not execute
+  one by itself." / "Completed proof appears only when the execution
+  pipeline recorded a transaction." / "Raw claim links are shown once and
+  cannot be redisplayed."
+- **Page model** (`src/server/dashboard/claims-page.ts`): gated wrappers
+  over the M12.2 claim read model (`buildClaimListPageModel` /
+  `buildClaimDetailPageModel`), display labels (`claimStatusLabel`,
+  `claimProofLabel`), pipeline enrichment for list rows (payout state +
+  proof presence), `reissueEligibilityDisplay` (pure role+state display),
+  and `shortClaimId`. List rows include short id, effective status, proof
+  chip, amount/currency/network, computed expiry, masked wallet, linked
+  payout id + state, reissue display, created timestamp, and a detail link.
+- **Tests** (+~30): list/detail page-model tests for gating (owner/approver/
+  member render, nonmember/inactive identical unavailable), workspace
+  scoping, honest empty state, effective-status grouping (incl. computed
+  expiry and claimed-preserved), approved-without-paid copy, completed-only-
+  with-pipeline-proof, never-fake-proof, masked wallets, linked payout
+  state, cross-workspace/unknown detail rejection with generic not-found,
+  tx-proof-only-on-hash, completed-without-hash/not-confirmed no-proof,
+  reissue display (owner/approver eligible, member denied), token/hash/
+  prefix absence in serialized models, execution-id/raw-JSON absence, JSON
+  serializability; route source-contract tests (forbidden imports, truthful
+  copy, empty state, no action controls incl. no reissue button, banned
+  terms, proof guards, shell nav includes Claims, generic not-found panel).
+  `tests/dashboard/payout-route-source.test.ts` nav assertion updated:
+  Claims is now a linked section.
 
 ## M12.5 payout and batch pages (implemented)
 
