@@ -32,6 +32,145 @@ npm run judge:doctor      # judge readiness (no payments)
 
 No secrets appear in this repository.
 
+## How to use Solvo
+
+### 1. Supported network and asset
+
+- **Execution support today: Base mainnet (chain 8453) USDC only.**
+- More chains and assets are future work; anything else is declined with a
+  clear message.
+
+### 2. KeeperHub surfaces used
+
+- **MCP** — the bot talks to KeeperHub through the MCP adapter.
+- **Direct KeeperHub execution through MCP** — execution happens only after
+  an owner/approver approves, through the existing execution pipeline.
+- **Audit trail / proof** — every request, approval, and execution is
+  recorded; proof (tx hashes) comes only from the execution pipeline.
+- **Not used in this version:** KeeperHub CLI, Workflow Builder, x402/MPP.
+
+### 3. Telegram workspace setup
+
+In the Telegram group where the community coordinates payouts, run:
+
+```
+/workspace init
+```
+
+- Run it **inside the group** (private chats are not community workspaces).
+- The initializer becomes **owner** if their numeric Telegram ID is in
+  `TELEGRAM_ALLOWED_DEV_USER_IDS` (the authorized initializer allowlist).
+- Re-running it is idempotent — it returns the existing workspace.
+
+### 4. Add members and approvers
+
+```
+/member add <telegram_numeric_user_id> member
+/member add <telegram_numeric_user_id> approver
+/member list
+/member remove <telegram_numeric_user_id>
+```
+
+Roles:
+
+- **owner** — can manage members/recipients and approve eligible requests.
+- **approver** — can approve eligible requests and manage recipients.
+- **member** — can request payouts but cannot approve.
+- **Requesters cannot approve their own payout** (separation of duty is
+  enforced server-side).
+
+Notes:
+
+- **Numeric Telegram user IDs are required — not `@usernames`** (usernames
+  cannot authorize actions). Get an ID from `@userinfobot` or the bot's
+  replies.
+- If someone is not added as an active member, their group commands are
+  unavailable or denied.
+
+### 5. Add recipient aliases and wallets
+
+```
+/recipient add blossom 0x76D7a718CcDc1c132c52D4C05eA0c2FA8e657486
+/recipient list
+```
+
+- Aliases are **workspace-scoped** — they only exist in the group where they
+  were added.
+- `/pay blossom 0.01 USDC` only works **after** `blossom` has been added as a
+  recipient alias in that workspace.
+- Aliases are **not Telegram usernames**.
+- Saving a recipient does not move funds.
+
+### 6. Request a payout
+
+```
+/pay blossom 0.01 USDC
+/pay 0x76D7a718CcDc1c132c52D4C05eA0c2FA8e657486 0.01 USDC
+```
+
+- In community groups, `/pay` creates a **pending approval request** — it
+  does **not** execute immediately.
+- Another eligible approver must approve it; **self-approval is blocked**.
+- Unknown alias? The bot replies: *Recipient alias not found. Add it with
+  `/recipient add <alias> <wallet>`.*
+
+### 7. Dashboard access
+
+```
+/dashboard
+```
+
+- Active workspace members get a short-lived **one-time dashboard link** via
+  an inline "Open dashboard" button.
+- The dashboard is **read-only** in M12.
+- It shows: overview, approvals, payouts, batches, claims, recipients,
+  members, policies, agent runs, and audit.
+- Without a valid session it shows no workspace data.
+
+### 8. Claim links
+
+```
+/claimpay 0.01 USDC
+/claimstatus <claim-id>
+```
+
+- Claim links collect the recipient wallet **later** — the recipient enters
+  their wallet on the claim page.
+- **Wallet entered does not mean funds moved.**
+- Approval/execution are still required before anything moves.
+
+### 9. Judge Mode
+
+```
+/judgepay <wallet> 0.01 USDC
+```
+
+- Capped public proof path (Base USDC only).
+- One successful payment per user is enforced when that config is enabled
+  (`JUDGE_MAX_SUCCESSFUL_PAYMENTS_PER_USER`).
+
+### 10. Production setup notes
+
+Before live dashboard use, the two pending migrations must be applied:
+
+```bash
+npm run db:migrate   # applies 0013 (claim reissue) + 0014 (dashboard login tokens)
+```
+
+Required environment:
+
+- `SOLVO_DASHBOARD_COOKIE_SECRET` — required in production for dashboard
+  sessions; without it production refuses all dashboard cookies.
+- `NEXT_PUBLIC_APP_URL` — the deployed app URL, e.g.
+  `https://solvo-beryl.vercel.app`.
+
+Telegram wiring:
+
+```bash
+npm run telegram:set-webhook -- --url https://solvo-beryl.vercel.app/api/telegram/webhook
+npm run telegram:commands   # register the bot command menu
+```
+
 ## Roadmap
 
 ### Shipped
