@@ -21,8 +21,8 @@ const menuLinks = [
 ] as const;
 
 const linkClass = (active: boolean) =>
-  `inline-flex min-h-11 items-center text-[11px] font-medium uppercase leading-[1.2] tracking-[0.2em] transition-colors duration-200 ${
-    active ? "text-primary" : "text-muted hover:text-primary"
+  `nav-interaction inline-flex min-h-11 items-center text-[11px] font-medium uppercase leading-[1.2] tracking-[0.2em] ${
+    active ? "text-primary" : "text-muted"
   }`;
 
 export function SiteNav() {
@@ -82,8 +82,8 @@ export function SiteNav() {
         aria-expanded={open}
         aria-controls="site-menu"
         aria-label={open ? "Close menu" : "Open menu"}
-        className={`inline-flex min-h-11 min-w-11 items-center justify-end text-[11px] font-medium uppercase leading-[1.2] tracking-[0.2em] transition-colors md:hidden ${
-          open ? "text-primary" : "text-muted hover:text-primary"
+        className={`nav-interaction inline-flex min-h-11 min-w-11 items-center justify-end text-[11px] font-medium uppercase leading-[1.2] tracking-[0.2em] md:hidden ${
+          open ? "text-primary" : "text-muted"
         }`}
       >
         {open ? "Close" : "Menu"}
@@ -100,7 +100,7 @@ export function SiteNav() {
                 <Link
                   href={link.href}
                   onClick={() => setOpen(false)}
-                  className="flex min-h-11 items-center py-4 text-[12px] font-medium uppercase leading-[1.2] tracking-[0.2em] text-secondary hover:text-primary"
+                  className="nav-interaction flex min-h-11 items-center py-4 text-[12px] font-medium uppercase leading-[1.2] tracking-[0.2em] text-secondary"
                 >
                   {link.label}
                 </Link>

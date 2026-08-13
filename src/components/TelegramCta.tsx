@@ -21,7 +21,7 @@ export function TelegramCta({
 }: TelegramCtaProps) {
   const variantClassName =
     variant === "text"
-      ? "!border-transparent !px-0 !text-muted hover:!text-primary"
+      ? "nav-interaction !border-transparent !px-0 !text-muted"
       : "";
 
   if (telegramConfigured) {

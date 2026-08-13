@@ -4,6 +4,7 @@ import test from "node:test";
 
 const pageShell = readFileSync("src/components/PageShell.tsx", "utf8");
 const landing = readFileSync("src/app/page.tsx", "utf8");
+const cta = readFileSync("src/components/Cta.tsx", "utf8");
 const siteNav = readFileSync("src/components/SiteNav.tsx", "utf8");
 const telegramCta = readFileSync("src/components/TelegramCta.tsx", "utf8");
 const globals = readFileSync("src/app/globals.css", "utf8");
@@ -60,6 +61,28 @@ const cssRules = (cssSource: string) => Array.from(
   withoutComments(cssSource).matchAll(/(?:^|})\s*([^@}{][^{]*)\{([^{}]*)\}/g),
   (match) => ({ selector: match[1].trim(), body: match[2] }),
 );
+
+const rulesForClass = (className: string, cssSource = globals) => {
+  const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return cssRules(cssSource).filter((rule) =>
+    new RegExp(`\\.${escaped}(?![A-Za-z0-9-])`).test(rule.selector),
+  );
+};
+
+const reducedMotionBlock = () => {
+  const clean = withoutComments(globals);
+  const match = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/.exec(clean);
+  if (!match) return "";
+
+  let depth = 1;
+  let cursor = (match.index ?? 0) + match[0].length;
+  const start = cursor;
+  for (; cursor < clean.length && depth > 0; cursor += 1) {
+    if (clean[cursor] === "{") depth += 1;
+    if (clean[cursor] === "}") depth -= 1;
+  }
+  return depth === 0 ? clean.slice(start, cursor - 1) : "";
+};
 
 const cssFunctionBodies = (source: string, functionName: string) => {
   const clean = withoutComments(source);
@@ -230,6 +253,64 @@ test("site navigation renders the text Telegram CTA and accessible menu state", 
   assert.match(siteNav, /aria-controls=["']site-menu["']/);
 });
 
+test("desktop links, the mobile trigger, mobile links, and text Telegram action share the centered hairline interaction", () => {
+  const navHookCount = siteNav.match(/\bnav-interaction\b/g)?.length ?? 0;
+  const textVariant = telegramCta.match(/variant\s*===\s*["']text["'][\s\S]*?(?=;\s*\n|if\s*\()/)?.[0] ?? "";
+  const rules = rulesForClass("nav-interaction");
+  const ruleSource = rules.map((rule) => `${rule.selector} { ${rule.body} }`).join("\n");
+  const hairline = rules.find((rule) =>
+    /\.nav-interaction::(?:before|after)/.test(rule.selector)
+      && /(?:height|block-size)\s*:\s*1px|border-(?:top|bottom)\s*:\s*1px/i.test(rule.body),
+  );
+  const revealSelectors = rules.filter((rule) =>
+    /\.nav-interaction:(?:hover|focus-visible)|\.nav-interaction\[aria-expanded=["']true["']\]/.test(rule.selector)
+      && /::(?:before|after)/.test(rule.selector),
+  );
+  const failures = [
+    navHookCount >= 3 ? "" : "expected nav-interaction on desktop links, the mobile trigger, and mobile links",
+    /\bnav-interaction\b/.test(textVariant) ? "" : "expected the text Telegram variant to use the same interaction hook",
+    hairline && /(?:left|inset-inline-start)\s*:\s*50%|transform-origin\s*:\s*center/i.test(hairline.body)
+      ? ""
+      : "expected a centered one-pixel hairline pseudo-element",
+    revealSelectors.some((rule) => /transform\s*:\s*(?:translateX\([^)]*\)\s*)?scaleX\(\s*1\s*\)|opacity\s*:\s*1/i.test(rule.body))
+      ? ""
+      : "expected hover, focus, or open menu state to reveal the hairline",
+    /\.nav-interaction:hover[\s\S]*color\s*:\s*(?:var\(--color-primary\)|#ededed)/i.test(ruleSource)
+      && /\.nav-interaction:focus-visible[\s\S]*color\s*:\s*(?:var\(--color-primary\)|#ededed)/i.test(ruleSource)
+      ? ""
+      : "expected both hover and focus to shift muted navigation text to primary",
+    /\.nav-interaction\[aria-expanded=["']true["']\][\s\S]*::(?:before|after)/i.test(ruleSource)
+      ? ""
+      : "expected the open mobile trigger to retain the same hairline state",
+  ].filter(Boolean);
+
+  assert.equal(failures.length, 0, failures.join("; "));
+});
+
+test("outline actions use a one-pixel lift with restrained border and tint feedback on hover and focus", () => {
+  const ctaJsx = returnedJsx(cta, "Cta");
+  const rules = rulesForClass("outline-action");
+  const base = rules.find((rule) => /^\.outline-action(?:\s|,|$)/.test(rule.selector) && !/:(?:hover|focus-visible)/.test(rule.selector));
+  const interactive = rules.filter((rule) => /\.outline-action:(?:hover|focus-visible)/.test(rule.selector));
+  const hover = interactive.find((rule) => /\.outline-action:hover/.test(rule.selector));
+  const focus = interactive.find((rule) => /\.outline-action:focus-visible/.test(rule.selector));
+  const feedback = interactive.map((rule) => rule.body).join("\n");
+  const subtleTint = Array.from(feedback.matchAll(/background(?:-color)?\s*:\s*rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*([0-9.]+)\s*\)/gi), (match) => Number(match[1]))
+    .some((alpha) => alpha > 0 && alpha <= 0.06);
+  const failures = [
+    /\boutline-action\b/.test(ctaJsx) ? "" : "expected active Cta surfaces to expose the outline-action hook",
+    base && /transition[^;]*(?:transform|all)/i.test(base.body) ? "" : "expected the outline action to transition its one-pixel movement",
+    hover && focus ? "" : "expected equal hover and keyboard-focus rules",
+    /transform\s*:\s*translateY\(\s*-1px\s*\)/i.test(feedback) ? "" : "expected the approved one-pixel lift",
+    /border-color\s*:\s*rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*(?:0\.[3-9]|1)/i.test(feedback)
+      ? ""
+      : "expected a brighter monochrome border",
+    subtleTint ? "" : "expected a barely visible monochrome background tint",
+  ].filter(Boolean);
+
+  assert.equal(failures.length, 0, failures.join("; "));
+});
+
 test("home mark keeps its accessible label and enlarged type size", () => {
   const navJsx = returnedJsx(siteNav, "SiteNav");
   const homeMark = navJsx.match(/<Link\b[\s\S]*?aria-label=["']Solvo home["'][\s\S]*?<\/Link>/)?.[0] ?? "";
@@ -251,4 +332,25 @@ test("mobile navigation closes on Escape and returns focus", () => {
 test("Telegram CTA keeps the specified optional props", () => {
   assert.match(telegramCta, /variant\?:\s*["']outline["']\s*\|\s*["']text["']/);
   assert.match(telegramCta, /showConfigurationNote\?:\s*boolean/);
+});
+
+test("reduced motion neutralizes newly introduced hover movement and reveal transitions", () => {
+  const reduced = reducedMotionBlock();
+  const outline = rulesForClass("outline-action", reduced).map((rule) => `${rule.selector} { ${rule.body} }`).join("\n");
+  const nav = rulesForClass("nav-interaction", reduced).map((rule) => `${rule.selector} { ${rule.body} }`).join("\n");
+  const strip = rulesForClass("execution-strip-link", reduced).map((rule) => `${rule.selector} { ${rule.body} }`).join("\n");
+  const failures = [
+    reduced ? "" : "expected a reduced-motion media block",
+    /transform\s*:\s*none/i.test(outline) && /transition(?:-duration)?\s*:\s*(?:none|0(?:ms|s)?)/i.test(outline)
+      ? ""
+      : "expected outline-action lift and transition to be neutralized",
+    /transition(?:-duration)?\s*:\s*(?:none|0(?:ms|s)?)/i.test(nav)
+      ? ""
+      : "expected navigation hairline reveal transitions to be disabled",
+    /transition(?:-duration)?\s*:\s*(?:none|0(?:ms|s)?)/i.test(strip)
+      ? ""
+      : "expected execution-strip hairline reveal transitions to be disabled",
+  ].filter(Boolean);
+
+  assert.equal(failures.length, 0, failures.join("; "));
 });

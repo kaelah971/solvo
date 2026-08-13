@@ -7,11 +7,11 @@ import { ExecutionReceipt } from "@/components/ExecutionReceipt";
 import { ExecutionStrip } from "@/components/ExecutionStrip";
 import { Footer } from "@/components/Footer";
 import { GhostWordmark } from "@/components/GhostWordmark";
+import { HeroTypingWordmark } from "@/components/HeroTypingWordmark";
 import { Lamp } from "@/components/Lamp";
 import { SectionLabel } from "@/components/SectionLabel";
 import { SiteNav } from "@/components/SiteNav";
 import { TelegramCta } from "@/components/TelegramCta";
-import { Wordmark } from "@/components/Wordmark";
 
 export const metadata: Metadata = {
   title: "From instruction to execution",
@@ -40,12 +40,22 @@ export default function Home() {
                 <Lamp className="lamp-breathe block h-auto w-full" />
               </div>
               <div className="hero-word-stack flex flex-col items-center">
-                <GhostWordmark className="hero-enter whitespace-nowrap" />
-                <div className="hero-enter-delayed relative z-10 mt-[clamp(0.75rem,2vw,1.25rem)] flex flex-col items-center [@media(max-height:500px)_and_(min-width:640px)]:!mt-1">
-                  <Wordmark className="[@media(max-height:500px)_and_(min-width:640px)]:!text-[12px]" />
-                  <p className="mt-4 max-w-[420px] text-[12px] leading-[1.6] tracking-[0.05em] text-secondary sm:text-[13px] [@media(max-height:500px)_and_(min-width:640px)]:!mt-2 [@media(max-height:500px)_and_(min-width:640px)]:!max-w-[360px] [@media(max-height:500px)_and_(min-width:640px)]:!text-[10px] [@media(max-height:500px)_and_(min-width:640px)]:!leading-[1.4]">
+                <div className="hero-wordmark-lockup hero-enter relative">
+                  <HeroTypingWordmark />
+                  <GhostWordmark className="mt-[clamp(0.55rem,1.4vw,0.9rem)] whitespace-nowrap [@media(max-height:500px)_and_(min-width:640px)]:!mt-1" />
+                </div>
+                <div className="hero-enter-delayed relative z-10 flex flex-col items-center">
+                  <p className="mt-3 max-w-[420px] text-[12px] leading-[1.6] tracking-[0.05em] text-secondary sm:text-[13px] [@media(max-height:500px)_and_(min-width:640px)]:!mt-2 [@media(max-height:500px)_and_(min-width:640px)]:!max-w-[360px] [@media(max-height:500px)_and_(min-width:640px)]:!text-[10px] [@media(max-height:500px)_and_(min-width:640px)]:!leading-[1.4]">
                     Telegram payment coordination with KeeperHub-backed proof.
                   </p>
+                  <div className="hero-telegram-action mt-5">
+                    <TelegramCta
+                      label="Open Solvo in Telegram"
+                      variant="outline"
+                      showConfigurationNote={false}
+                      className="hero-telegram-cta"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -75,7 +85,7 @@ export default function Home() {
 
           <section
             id="execution-line"
-            className="mt-20 grid gap-8 border-t border-line pt-10 md:mt-28 md:pt-12 min-[900px]:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] min-[900px]:items-center min-[900px]:gap-16"
+            className="mt-20 scroll-mt-8 grid gap-8 border-t border-line pt-10 md:mt-28 md:pt-12 min-[900px]:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] min-[900px]:items-center min-[900px]:gap-16"
           >
             <div className="max-w-[640px]">
               <SectionLabel>The Execution Line</SectionLabel>
@@ -103,7 +113,7 @@ export default function Home() {
 
           <section
             id="check"
-            className="mt-20 grid gap-8 border-t border-line pt-10 md:mt-28 md:pt-12 min-[900px]:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] min-[900px]:items-center min-[900px]:gap-16"
+            className="mt-20 scroll-mt-8 grid gap-8 border-t border-line pt-10 md:mt-28 md:pt-12 min-[900px]:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] min-[900px]:items-center min-[900px]:gap-16"
           >
             <div className="max-w-[640px]">
               <SectionLabel>Agent decision visibility</SectionLabel>
@@ -158,7 +168,7 @@ export default function Home() {
 
           <section
             id="prove"
-            className="mt-20 grid gap-8 border-t border-line pt-10 md:mt-28 md:pt-12 min-[900px]:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] min-[900px]:items-center min-[900px]:gap-16"
+            className="mt-20 scroll-mt-8 grid gap-8 border-t border-line pt-10 md:mt-28 md:pt-12 min-[900px]:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] min-[900px]:items-center min-[900px]:gap-16"
           >
             <div className="min-w-0 max-w-[760px]">
               <ExecutionReceipt

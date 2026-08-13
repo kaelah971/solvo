@@ -13,19 +13,20 @@ type CtaProps = {
  * hover. When `disabled`, renders a non-interactive element that never
  * pretends to work.
  */
-export function Cta({
-  children,
-  href,
-  disabled = false,
-  title,
-  target,
-  rel,
-  className = "",
-}: CtaProps) {
-  const styles = `inline-flex min-h-11 items-center justify-center gap-2 border px-6 py-[10px] text-[11px] font-medium uppercase leading-[1.2] tracking-[0.2em] transition-colors duration-200 ${
+export function Cta(props: CtaProps) {
+  const {
+    children,
+    href,
+    disabled = false,
+    title,
+    target,
+    rel,
+    className = "",
+  } = props;
+  const styles = `inline-flex min-h-11 items-center justify-center gap-2 border px-6 py-[10px] text-[11px] font-medium uppercase leading-[1.2] tracking-[0.2em] ${
     disabled
       ? "cursor-not-allowed border-[rgba(255,255,255,0.08)] text-muted"
-      : "border-[rgba(255,255,255,0.15)] text-primary hover:border-[rgba(255,255,255,0.35)]"
+      : "border-[rgba(255,255,255,0.15)] text-primary"
   } ${className}`;
 
   if (disabled) {
@@ -47,7 +48,7 @@ export function Cta({
         title={title}
         target={target}
         rel={rel}
-        className={`${styles} rounded-[2px]`}
+        className={`${styles} outline-action rounded-[2px]`}
       >
         {children}
       </a>
@@ -55,7 +56,11 @@ export function Cta({
   }
 
   return (
-    <button type="button" title={title} className={`${styles} rounded-[2px]`}>
+    <button
+      type="button"
+      title={title}
+      className={`${styles} outline-action rounded-[2px]`}
+    >
       {children}
     </button>
   );
