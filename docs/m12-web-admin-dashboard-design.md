@@ -5,11 +5,67 @@ Branch: `feature/web-admin-dashboard`
 Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
 login bridge + M12.5 payout/batch pages + M12.6 claim pages + M12.7
 recipients/members pages + M12.8 policies page + M12.9 agent-runs/audit
-pages + M12.10 approvals page (read-only) implemented.** The operator
-console is specified; read models, the `/app` overview, the Telegram → web
-login flow, the payout/batch pages, the claim pages, the directory pages,
-the policies page, the observability pages, and the read-only approvals
-queue ship. No admin actions exist yet, and no migrations were applied.
+pages + M12.10 approvals page (read-only) + M12.11 security/truthfulness
+gate implemented.** The operator console is specified; read models, the
+`/app` overview, the Telegram → web login flow, the payout/batch pages, the
+claim pages, the directory pages, the policies page, the observability
+pages, and the read-only approvals queue ship, and the adversarial gate
+passes. No admin actions exist yet, and no migrations were applied. M12 is
+NOT marked shipped — the docs/roadmap final gate is M12.12.
+
+## M12.11 security/truthfulness gate (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.10):
+
+- **Dashboard remains read-only**: the whole surface was re-proven to have
+  no approve/reject/execute/retry/reissue/add/edit/delete controls, no
+  forms, no server actions, no client handlers, and no `"use client"`
+  components across every `/app` page (source-swept).
+- **No web actions shipped**: M12.10b action wiring is explicitly deferred;
+  nothing in the dashboard can call the approval services, execution
+  gateway, or reissue service.
+- **No execution bypass**: every page/model file is scanned for forbidden
+  imports (`keeperhub/`, `mcp-client`, `execution-service`,
+  `execution-gateway`, `telegram/flows`, `webhook`, `judge/`, `providers/`,
+  `openai`, `anthropic`, `ai-sdk`, `postgres`, `node:http`, `node:https`,
+  `fetch(`) and for raw SQL / database-client access; the Telegram
+  `/dashboard` flow is proven to reference no execution/payment/approval
+  vocabulary and to log nothing.
+- **Session/token guarantees**: HMAC-signed HttpOnly SameSite=Strict
+  cookies, tamper rejection, production-without-secret refusal,
+  membership re-check on every request (removed/inactive members lose
+  access with a still-valid cookie), one-time login tokens that expire and
+  persist only as SHA-256 hashes, raw login tokens absent from storage/
+  logs/pages/models, and the auth routes proven to render no markup and log
+  nothing.
+- **Workspace no-leak guarantees**: behavioral sweeps prove every list
+  page model (9 builders) denies nonmember/removed/inactive contexts and
+  shows foreign-workspace rows never; every detail page model (4 builders)
+  returns the identical generic result for unknown and cross-workspace ids
+  (no existence leak); pages never reference `workspaceId`/
+  `telegramUserId`/search params; the unavailable/not-found panels accept
+  no props and carry no sensitive fields.
+- **Proof/truth source guarantees**: completed proof appears ONLY from a
+  pipeline tx hash (completed-without-hash never invents proof), approved/
+  payment-prepared never reads as paid, wallet-entry never reads as funds
+  moved, agent runs never carry tx truth, audit rows never carry transaction
+  proof, and overview totals never derive from `agent_runs`. No serialized
+  dashboard model contains claim token/hash/prefix, KeeperHub execution ids,
+  or provider/interpretation/decision/candidates JSON.
+- **Forbidden surfaces checked**: token-material and raw-blob keys, secret
+  markers (`DATABASE_URL`, API keys, bot tokens, `sk-`, Bearer), and
+  hash-shaped literals are swept across all pages and models; the shell nav
+  is proven to link only to implemented route directories (href → directory
+  existence check); deterministic (created_at, id) DESC ordering is
+  re-verified across claim/audit/agent-run lists.
+- **Centralized gate** (`tests/dashboard/dashboard-security-gate.test.ts`,
+  +22 tests): source-contract sweeps over `src/app/app/**`,
+  `src/server/dashboard/**`, `src/app/auth/*/route.ts`, and
+  `src/server/telegram/flows/dashboard-flow.ts` plus behavioral sweeps over
+  all page-model builders. Existing session/login/per-surface route tests
+  were extended where the gate overlaps.
+- **Migrations not applied**: no dashboard source references migration
+  0013/0014 or DDL; tests pass without either migration being applied.
 
 ## M12.10 approvals page (implemented)
 
