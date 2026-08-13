@@ -145,8 +145,9 @@ describe("payout/batch route source contract", () => {
     assert.match(layout, /href: "\/app\/claims"/);
     assert.match(layout, /href: "\/app\/recipients"/);
     assert.match(layout, /href: "\/app\/members"/);
+    assert.match(layout, /href: "\/app\/policies"/);
     // Unimplemented sections must not be linked.
-    for (const missing of ["approvals", "policies", "audit", "agent-runs", "settings"]) {
+    for (const missing of ["approvals", "audit", "agent-runs", "settings"]) {
       assert.equal(layout.includes(`"${missing}"`), false, `layout links to unimplemented section /${missing}`);
     }
   });

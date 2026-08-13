@@ -4,10 +4,81 @@ Date: 2026-08-13
 Branch: `feature/web-admin-dashboard`
 Status: **M12.1 design + M12.2 read models + M12.3 overview shell + M12.4
 login bridge + M12.5 payout/batch pages + M12.6 claim pages + M12.7
-recipients/members pages implemented.** The operator console is specified;
-read models, the `/app` overview, the Telegram → web login flow, the
-payout/batch pages, the claim pages, and the directory pages ship. No admin
-actions exist yet, and no migrations were applied.
+recipients/members pages + M12.8 policies page implemented.** The operator
+console is specified; read models, the `/app` overview, the Telegram → web
+login flow, the payout/batch pages, the claim pages, the directory pages,
+and the policies page ship. No admin actions exist yet, and no migrations
+were applied.
+
+## M12.8 policies page (implemented)
+
+Implemented on `feature/web-admin-dashboard` (after M12.7):
+
+- **Route added**: `/app/policies` — server-rendered (`force-dynamic`),
+  read-only, and gated by the same M12.3/M12.4 session flow (signed cookie →
+  repo re-check of ACTIVE same-workspace membership → gated page model). The
+  dashboard shell nav now links Overview / Payouts / Batches / Claims /
+  Recipients / Members / Policies (+ Sign out); no links exist for
+  unimplemented sections.
+- **Read-only behavior**: no forms, buttons, server actions, inputs, or
+  client handlers. No edit/save/apply surface exists; the page cannot change
+  limits, policies, or workspace mode.
+- **Workspace/session gate**: no session, unknown workspace, non-member,
+  inactive member, and no-DB all render the single generic
+  `DashboardUnavailable` panel. No cross-workspace data; no workspace
+  existence leak.
+- **Displayed policy sections** (only fields the schema actually stores —
+  nothing fabricated):
+  - workspace mode (SANDBOX / DEVELOPMENT / PERSONAL / COMMUNITY / JUDGE /
+    UNKNOWN fallback) + active status;
+  - token/network as a label ("BASE · USDC" only when the stored chain/token
+    match the canonical values; never the raw token address);
+  - per-transaction limit and daily limit from the workspace row (rendered
+    "Not configured" when null — no invented values);
+  - spent today + remaining today (window = items created since UTC day
+    start in the same in-flight/completed states the approval-time daily
+    checks use; remaining only when a daily limit exists);
+  - approval requirement (REQUIRED / JUDGE POLICY / NOT CONFIGURED);
+  - separation-of-duty note (server-side, requesters cannot approve their
+    own payout);
+  - judge/sandbox/development mode note as constant product copy — judge =
+    `/judgepay`-only execution with its own caps, dashboard display-only;
+    sandbox = simulation, no funds move; development = authorized users +
+    small caps. No env values or secrets.
+- **Role capability summary** (display only): OWNER — "Owners may manage
+  policies later. Editing limits is not enabled yet."; APPROVER — "Approvers
+  can view policies but cannot manage them."; MEMBER — "Members are
+  view-only here."
+- **Safety/truthfulness copy**: "Policies explain what Solvo will allow.
+  This page does not change them." / "Approval and execution still happen
+  through the existing Solvo pipeline." / "KeeperHub execution happens only
+  after approval." Claim-link safety block: wallet-entered-does-not-move-
+  funds, claim approval prepares a payment (does not execute by itself),
+  raw claim links shown once, reissue not enabled from the dashboard yet.
+  Dashboard-action note: editing limits/policies not enabled yet; policy
+  changes will be audited when enabled later.
+- **Page model** (`src/server/dashboard/policies-page.ts`):
+  `buildPolicyPageModel` (gated, workspace-scoped) + pure display helpers
+  `policyNetworkLabel` / `policyApprovalLabel` / `policyModeNote` /
+  `policyCapabilitySummary` / `utcDayStartIso`. The daily-spend state list
+  is defined locally (same states as the approval-time checks) so the model
+  imports no execution/flow surface. No keeperhub imports (the canonical
+  token address is matched case-insensitively against a local constant and
+  never displayed).
+- **Tests** (+19): page-model tests for gating (owner/approver/member
+  render, nonmember/inactive identical unavailable), workspace scoping,
+  mode + network labels (raw token address never leaks), limits + spent/
+  remaining truth, null limits never invented, role capability summaries,
+  judge workspace policy label, no env secrets in output, JSON
+  serializability; route source-contract tests (forbidden imports, truthful
+  copy, claim-link copy, no edit/save/apply controls or forms, banned
+  internal terms, secret-marker scan, model-driven limit display, shell nav
+  includes Policies, every denied path renders the shared unavailable
+  panel). `tests/dashboard/payout-route-source.test.ts` nav assertion
+  updated: Policies is now a linked section.
+- **No actions/execution**: nothing on the page moves funds or changes
+  policy; no migrations were applied during the M12.8 gates (0013/0014
+  remain unapplied).
 
 ## M12.7 recipients and members pages (implemented)
 
